@@ -1,0 +1,8 @@
+{
+  "name": "Tether WDK Wallet",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "custom",
+  "id": "d41c03c7"
+}
