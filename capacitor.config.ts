@@ -15,10 +15,15 @@ const config: CapacitorConfig = {
     webContentsDebuggingEnabled: true,
     loggingBehavior: 'debug'
   },
+  ios: {
+    contentInset: 'automatic',
+    scrollEnabled: true,
+    allowsLinkPreview: false
+  },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 0,  // 鸿蒙系统立即显示
-      backgroundColor: '#ffffff',  // 白色背景更安全
+      launchShowDuration: 0,
+      backgroundColor: '#ffffff',
       showSpinner: false,
     }
   }
