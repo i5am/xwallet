@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>ad-hoc</string> <!-- 改为 app-store 用于提交到 App Store -->
+    
+    <key>teamID</key>
+    <string>YOUR_TEAM_ID</string> <!-- 替换为你的 Team ID -->
+    
+    <key>signingStyle</key>
+    <string>manual</string>
+    
+    <key>stripSwiftSymbols</key>
+    <true/>
+    
+    <key>uploadBitcode</key>
+    <false/>
+    
+    <key>uploadSymbols</key>
+    <true/>
+    
+    <key>compileBitcode</key>
+    <false/>
+    
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.yourcompany.wdk</key> <!-- 替换为你的 Bundle ID -->
+        <string>YOUR_PROVISIONING_PROFILE_NAME</string> <!-- 替换为 Provisioning Profile 名称 -->
+    </dict>
+</dict>
+</plist>

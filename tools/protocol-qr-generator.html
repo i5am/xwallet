@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WDK 协议二维码生成器</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      font-size: 1.1em;
+      opacity: 0.9;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      margin-bottom: 20px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    .tab {
+      padding: 12px 24px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      color: #6b7280;
+      transition: all 0.3s;
+      border-bottom: 3px solid transparent;
+    }
+
+    .tab.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+      font-weight: 600;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 100px;
+      font-family: monospace;
+    }
+
+    .btn {
+      padding: 12px 30px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+      width: 100%;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .result {
+      display: none;
+      margin-top: 30px;
+      padding: 20px;
+      background: #f9fafb;
+      border-radius: 8px;
+    }
+
+    .result.show {
+      display: block;
+    }
+
+    .qr-container {
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    #qrcode {
+      display: inline-block;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .protocol-data {
+      background: #1f2937;
+      color: #f3f4f6;
+      padding: 15px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .info-box {
+      background: #e0e7ff;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔐 WDK 协议二维码生成器</h1>
+      <p>生成符合 WDK 协议标准的二维码用于测试</p>
+    </div>
+
+    <div class="card">
+      <div class="info-box">
+        <strong>📋 使用说明：</strong>
+        <ul style="margin-top: 10px; margin-left: 20px;">
+          <li>选择消息类型（转账交易、消息签名、授权请求、地址信息）</li>
+          <li>填写相关参数</li>
+          <li>点击"生成二维码"按钮</li>
+          <li>使用冷钱包扫描生成的二维码进行测试</li>
+        </ul>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('transaction')">💸 转账交易</button>
+        <button class="tab" onclick="switchTab('message')">✍️ 消息签名</button>
+        <button class="tab" onclick="switchTab('authorization')">🔐 授权请求</button>
+        <button class="tab" onclick="switchTab('address')">📍 地址信息</button>
+      </div>
+
+      <!-- 转账交易 -->
+      <div id="transaction-tab" class="tab-content active">
+        <div class="grid">
+          <div class="form-group">
+            <label>链类型 *</label>
+            <select id="tx-chain">
+              <option value="BTC">Bitcoin (BTC)</option>
+              <option value="ETH">Ethereum (ETH)</option>
+              <option value="BNB">BNB Chain</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>网络 *</label>
+            <select id="tx-network">
+              <option value="mainnet">主网 (Mainnet)</option>
+              <option value="testnet">测试网 (Testnet)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>发送方地址 *</label>
+          <input type="text" id="tx-from" placeholder="bc1p..." value="bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr">
+        </div>
+        <div class="form-group">
+          <label>接收方地址 *</label>
+          <input type="text" id="tx-to" placeholder="bc1q..." value="bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq">
+        </div>
+        <div class="grid">
+          <div class="form-group">
+            <label>转账金额 *</label>
+            <input type="text" id="tx-amount" placeholder="0.001" value="0.001">
+          </div>
+          <div class="form-group">
+            <label>手续费 *</label>
+            <input type="text" id="tx-fee" placeholder="0.00001" value="0.00001">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>备注 (可选)</label>
+          <input type="text" id="tx-memo" placeholder="转账备注">
+        </div>
+        <button class="btn" onclick="generateTransactionQR()">生成转账二维码</button>
+      </div>
+
+      <!-- 消息签名 -->
+      <div id="message-tab" class="tab-content">
+        <div class="form-group">
+          <label>链类型 *</label>
+          <select id="msg-chain">
+            <option value="BTC">Bitcoin (BTC)</option>
+            <option value="ETH">Ethereum (ETH)</option>
+            <option value="BNB">BNB Chain</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>签名地址 *</label>
+          <input type="text" id="msg-address" placeholder="钱包地址" value="bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr">
+        </div>
+        <div class="form-group">
+          <label>待签名消息 *</label>
+          <textarea id="msg-message" placeholder="输入需要签名的消息内容...">欢迎使用 WDK 钱包！这是一条测试签名消息。</textarea>
+        </div>
+        <div class="form-group">
+          <label>编码格式</label>
+          <select id="msg-encoding">
+            <option value="utf8">UTF-8</option>
+            <option value="hex">Hex</option>
+            <option value="base64">Base64</option>
+          </select>
+        </div>
+        <button class="btn" onclick="generateMessageQR()">生成消息签名二维码</button>
+      </div>
+
+      <!-- 授权请求 -->
+      <div id="authorization-tab" class="tab-content">
+        <div class="form-group">
+          <label>DApp 名称 *</label>
+          <input type="text" id="auth-dapp" placeholder="MyDApp" value="测试DApp">
+        </div>
+        <div class="form-group">
+          <label>DApp 网址 *</label>
+          <input type="text" id="auth-url" placeholder="https://example.com" value="https://test-dapp.com">
+        </div>
+        <div class="form-group">
+          <label>链类型 *</label>
+          <select id="auth-chain">
+            <option value="BTC">Bitcoin (BTC)</option>
+            <option value="ETH">Ethereum (ETH)</option>
+            <option value="BNB">BNB Chain</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>钱包地址 *</label>
+          <input type="text" id="auth-address" placeholder="钱包地址" value="bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr">
+        </div>
+        <div class="form-group">
+          <label>请求权限 (多个权限用逗号分隔) *</label>
+          <input type="text" id="auth-permissions" placeholder="查看地址,签名消息,发送交易" value="查看地址,签名消息">
+        </div>
+        <div class="form-group">
+          <label>有效期 (分钟)</label>
+          <input type="number" id="auth-expire" placeholder="5" value="5">
+        </div>
+        <button class="btn" onclick="generateAuthorizationQR()">生成授权二维码</button>
+      </div>
+
+      <!-- 地址信息 -->
+      <div id="address-tab" class="tab-content">
+        <div class="grid">
+          <div class="form-group">
+            <label>链类型 *</label>
+            <select id="addr-chain">
+              <option value="BTC">Bitcoin (BTC)</option>
+              <option value="ETH">Ethereum (ETH)</option>
+              <option value="BNB">BNB Chain</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>网络 *</label>
+            <select id="addr-network">
+              <option value="mainnet">主网 (Mainnet)</option>
+              <option value="testnet">测试网 (Testnet)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>钱包地址 *</label>
+          <input type="text" id="addr-address" placeholder="bc1p..." value="bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr">
+        </div>
+        <div class="form-group">
+          <label>公钥 (可选)</label>
+          <input type="text" id="addr-publickey" placeholder="02...">
+        </div>
+        <div class="form-group">
+          <label>地址标签 (可选)</label>
+          <input type="text" id="addr-label" placeholder="我的BTC钱包" value="我的冷钱包">
+        </div>
+        <button class="btn" onclick="generateAddressQR()">生成地址二维码</button>
+      </div>
+
+      <!-- 结果显示 -->
+      <div id="result" class="result">
+        <h3 style="margin-bottom: 15px;">✅ 二维码生成成功</h3>
+        <div class="qr-container">
+          <div id="qrcode"></div>
+        </div>
+        <div style="margin-top: 20px;">
+          <h4 style="margin-bottom: 10px;">协议数据：</h4>
+          <div class="protocol-data" id="protocol-data"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function switchTab(tabName) {
+      // 隐藏所有标签内容
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+      
+      // 移除所有标签的活动状态
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      
+      // 显示选中的标签内容
+      document.getElementById(`${tabName}-tab`).classList.add('active');
+      
+      // 激活对应的标签
+      event.target.classList.add('active');
+    }
+
+    function createProtocolMessage(type, data) {
+      return {
+        protocol: 'WDK',
+        version: '1.0.0',
+        type: type,
+        timestamp: Date.now(),
+        data: data
+      };
+    }
+
+    function showResult(message) {
+      const resultDiv = document.getElementById('result');
+      const qrcodeDiv = document.getElementById('qrcode');
+      const protocolDataDiv = document.getElementById('protocol-data');
+      
+      // 清空之前的二维码
+      qrcodeDiv.innerHTML = '';
+      
+      // 生成新二维码
+      QRCode.toCanvas(message, {
+        width: 300,
+        margin: 2,
+        errorCorrectionLevel: 'M'
+      }, function(error, canvas) {
+        if (error) {
+          alert('生成二维码失败: ' + error);
+          return;
+        }
+        qrcodeDiv.appendChild(canvas);
+      });
+      
+      // 显示协议数据
+      protocolDataDiv.textContent = JSON.stringify(JSON.parse(message), null, 2);
+      
+      // 显示结果区域
+      resultDiv.classList.add('show');
+      
+      // 滚动到结果
+      resultDiv.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function generateTransactionQR() {
+      const chain = document.getElementById('tx-chain').value;
+      const network = document.getElementById('tx-network').value;
+      const from = document.getElementById('tx-from').value;
+      const to = document.getElementById('tx-to').value;
+      const amount = document.getElementById('tx-amount').value;
+      const fee = document.getElementById('tx-fee').value;
+      const memo = document.getElementById('tx-memo').value;
+      
+      if (!from || !to || !amount || !fee) {
+        alert('请填写所有必填字段！');
+        return;
+      }
+      
+      const txData = {
+        txId: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        chain: chain,
+        network: network,
+        from: from,
+        to: to,
+        amount: amount,
+        fee: fee
+      };
+      
+      if (memo) {
+        txData.memo = memo;
+      }
+      
+      const message = createProtocolMessage('SIGN_TRANSACTION_REQUEST', txData);
+      showResult(JSON.stringify(message));
+    }
+
+    function generateMessageQR() {
+      const chain = document.getElementById('msg-chain').value;
+      const address = document.getElementById('msg-address').value;
+      const messageText = document.getElementById('msg-message').value;
+      const encoding = document.getElementById('msg-encoding').value;
+      
+      if (!address || !messageText) {
+        alert('请填写所有必填字段！');
+        return;
+      }
+      
+      const msgData = {
+        messageId: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        chain: chain,
+        address: address,
+        message: messageText,
+        encoding: encoding
+      };
+      
+      const message = createProtocolMessage('SIGN_MESSAGE_REQUEST', msgData);
+      showResult(JSON.stringify(message));
+    }
+
+    function generateAuthorizationQR() {
+      const dapp = document.getElementById('auth-dapp').value;
+      const dappUrl = document.getElementById('auth-url').value;
+      const chain = document.getElementById('auth-chain').value;
+      const address = document.getElementById('auth-address').value;
+      const permissionsStr = document.getElementById('auth-permissions').value;
+      const expireMinutes = parseInt(document.getElementById('auth-expire').value) || 5;
+      
+      if (!dapp || !dappUrl || !address || !permissionsStr) {
+        alert('请填写所有必填字段！');
+        return;
+      }
+      
+      const permissions = permissionsStr.split(',').map(p => p.trim());
+      const expireTime = Date.now() + expireMinutes * 60 * 1000;
+      
+      const authData = {
+        requestId: `auth_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        dapp: dapp,
+        dappUrl: dappUrl,
+        chain: chain,
+        address: address,
+        permissions: permissions,
+        expireTime: expireTime
+      };
+      
+      const message = createProtocolMessage('AUTHORIZATION_REQUEST', authData);
+      showResult(JSON.stringify(message));
+    }
+
+    function generateAddressQR() {
+      const chain = document.getElementById('addr-chain').value;
+      const network = document.getElementById('addr-network').value;
+      const address = document.getElementById('addr-address').value;
+      const publicKey = document.getElementById('addr-publickey').value;
+      const label = document.getElementById('addr-label').value;
+      
+      if (!address) {
+        alert('请填写钱包地址！');
+        return;
+      }
+      
+      const addrData = {
+        chain: chain,
+        network: network,
+        address: address
+      };
+      
+      if (publicKey) {
+        addrData.publicKey = publicKey;
+      }
+      
+      if (label) {
+        addrData.label = label;
+      }
+      
+      const message = createProtocolMessage('ADDRESS_INFO', addrData);
+      showResult(JSON.stringify(message));
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二维码生成工具 - WDK 钱包测试</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .card h2 {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .qr-display {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .qr-display canvas {
+            max-width: 100%;
+            height: auto;
+            border: 3px solid #667eea;
+            border-radius: 10px;
+        }
+        
+        .qr-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .tab-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .example-btns {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .example-btn {
+            padding: 8px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        
+        .example-btn:hover {
+            background: #e0e0e0;
+            border-color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 二维码生成工具</h1>
+            <p>为 WDK 钱包扫描功能生成测试二维码</p>
+        </div>
+        
+        <div class="content">
+            <!-- 左侧：生成表单 -->
+            <div class="card">
+                <h2>生成二维码</h2>
+                
+                <div class="tab-container">
+                    <button class="tab active" onclick="switchTab('message')">消息签名</button>
+                    <button class="tab" onclick="switchTab('transaction')">交易签名</button>
+                    <button class="tab" onclick="switchTab('authorization')">授权请求</button>
+                </div>
+                
+                <!-- 消息签名表单 -->
+                <div id="message-content" class="tab-content active">
+                    <div class="form-group">
+                        <label>消息内容</label>
+                        <textarea id="message-text" placeholder="输入需要签名的消息...">Welcome to our DApp! Please sign this message to verify your identity.</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>请求者地址（可选）</label>
+                        <input type="text" id="message-address" placeholder="0x...">
+                    </div>
+                    <div class="example-btns">
+                        <button class="example-btn" onclick="loadExample('message', 'login')">登录验证</button>
+                        <button class="example-btn" onclick="loadExample('message', 'proof')">身份证明</button>
+                    </div>
+                    <button class="btn btn-primary" onclick="generateMessageQR()">生成二维码</button>
+                </div>
+                
+                <!-- 交易签名表单 -->
+                <div id="transaction-content" class="tab-content">
+                    <div class="form-group">
+                        <label>区块链类型</label>
+                        <select id="tx-chain">
+                            <option value="BTC">Bitcoin (BTC)</option>
+                            <option value="ETH">Ethereum (ETH)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>收款地址</label>
+                        <input type="text" id="tx-to" placeholder="bc1p... 或 0x...">
+                    </div>
+                    <div class="form-group">
+                        <label>转账金额</label>
+                        <input type="text" id="tx-amount" placeholder="0.001">
+                    </div>
+                    <div class="form-group">
+                        <label>手续费（可选）</label>
+                        <input type="text" id="tx-fee" placeholder="0.00001">
+                    </div>
+                    <div class="form-group">
+                        <label>交易数据（可选）</label>
+                        <input type="text" id="tx-data" placeholder="0x...">
+                    </div>
+                    <div class="example-btns">
+                        <button class="example-btn" onclick="loadExample('transaction', 'btc')">BTC 转账</button>
+                        <button class="example-btn" onclick="loadExample('transaction', 'eth')">ETH 转账</button>
+                    </div>
+                    <button class="btn btn-primary" onclick="generateTransactionQR()">生成二维码</button>
+                </div>
+                
+                <!-- 授权请求表单 -->
+                <div id="authorization-content" class="tab-content">
+                    <div class="form-group">
+                        <label>请求域名</label>
+                        <input type="text" id="auth-domain" placeholder="app.example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>授权范围（逗号分隔）</label>
+                        <textarea id="auth-scope" placeholder="read_address, sign_message, sign_transaction">read_address, sign_message</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>有效期（秒）</label>
+                        <input type="number" id="auth-expires" value="3600">
+                    </div>
+                    <div class="example-btns">
+                        <button class="example-btn" onclick="loadExample('authorization', 'basic')">基础授权</button>
+                        <button class="example-btn" onclick="loadExample('authorization', 'full')">完整授权</button>
+                    </div>
+                    <button class="btn btn-primary" onclick="generateAuthorizationQR()">生成二维码</button>
+                </div>
+            </div>
+            
+            <!-- 右侧：二维码显示 -->
+            <div class="card">
+                <h2>二维码预览</h2>
+                <div class="qr-display">
+                    <canvas id="qr-canvas"></canvas>
+                    <div class="qr-info" id="qr-info">
+                        点击左侧"生成二维码"按钮查看结果
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let currentTab = 'message';
+        
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // 更新标签页样式
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // 更新内容显示
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(tab + '-content').classList.add('active');
+        }
+        
+        function loadExample(type, example) {
+            if (type === 'message') {
+                if (example === 'login') {
+                    document.getElementById('message-text').value = 'Login verification for example.com\nTimestamp: ' + Date.now();
+                    document.getElementById('message-address').value = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb';
+                } else if (example === 'proof') {
+                    document.getElementById('message-text').value = 'I am the owner of this wallet address';
+                    document.getElementById('message-address').value = '';
+                }
+            } else if (type === 'transaction') {
+                if (example === 'btc') {
+                    document.getElementById('tx-chain').value = 'BTC';
+                    document.getElementById('tx-to').value = 'bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr';
+                    document.getElementById('tx-amount').value = '0.001';
+                    document.getElementById('tx-fee').value = '0.00001';
+                    document.getElementById('tx-data').value = '';
+                } else if (example === 'eth') {
+                    document.getElementById('tx-chain').value = 'ETH';
+                    document.getElementById('tx-to').value = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb';
+                    document.getElementById('tx-amount').value = '0.1';
+                    document.getElementById('tx-fee').value = '0.000021';
+                    document.getElementById('tx-data').value = '0x';
+                }
+            } else if (type === 'authorization') {
+                if (example === 'basic') {
+                    document.getElementById('auth-domain').value = 'app.example.com';
+                    document.getElementById('auth-scope').value = 'read_address, sign_message';
+                    document.getElementById('auth-expires').value = '3600';
+                } else if (example === 'full') {
+                    document.getElementById('auth-domain').value = 'dapp.example.com';
+                    document.getElementById('auth-scope').value = 'read_address, sign_message, sign_transaction, read_balance';
+                    document.getElementById('auth-expires').value = '7200';
+                }
+            }
+        }
+        
+        function generateMessageQR() {
+            const message = document.getElementById('message-text').value;
+            const address = document.getElementById('message-address').value;
+            
+            const data = {
+                type: 'message',
+                message: message,
+                timestamp: Date.now()
+            };
+            
+            if (address) {
+                data.address = address;
+            }
+            
+            const jsonString = JSON.stringify(data, null, 2);
+            generateQR(jsonString, '消息签名请求');
+        }
+        
+        function generateTransactionQR() {
+            const chain = document.getElementById('tx-chain').value;
+            const to = document.getElementById('tx-to').value;
+            const amount = document.getElementById('tx-amount').value;
+            const fee = document.getElementById('tx-fee').value;
+            const txData = document.getElementById('tx-data').value;
+            
+            const data = {
+                type: 'transaction',
+                to: to,
+                amount: amount,
+                chain: chain
+            };
+            
+            if (fee) {
+                data.fee = fee;
+            }
+            
+            if (txData) {
+                data.data = txData;
+            }
+            
+            const jsonString = JSON.stringify(data, null, 2);
+            generateQR(jsonString, '交易签名请求');
+        }
+        
+        function generateAuthorizationQR() {
+            const domain = document.getElementById('auth-domain').value;
+            const scopeText = document.getElementById('auth-scope').value;
+            const expires = parseInt(document.getElementById('auth-expires').value);
+            
+            const scope = scopeText.split(',').map(s => s.trim()).filter(s => s);
+            
+            const data = {
+                type: 'authorization',
+                domain: domain,
+                scope: scope,
+                expiresIn: expires
+            };
+            
+            const jsonString = JSON.stringify(data, null, 2);
+            generateQR(jsonString, '授权请求');
+        }
+        
+        function generateQR(data, title) {
+            const canvas = document.getElementById('qr-canvas');
+            const info = document.getElementById('qr-info');
+            
+            QRCode.toCanvas(canvas, data, {
+                width: 300,
+                margin: 2,
+                errorCorrectionLevel: 'M',
+                color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                }
+            }, function (error) {
+                if (error) {
+                    info.innerHTML = '<span style="color: red;">生成失败: ' + error + '</span>';
+                } else {
+                    info.innerHTML = `
+                        <strong>${title}</strong><br>
+                        <small>使用 WDK 钱包扫描此二维码</small><br>
+                        <details style="margin-top: 10px; text-align: left;">
+                            <summary style="cursor: pointer; font-weight: 600;">查看 JSON 数据</summary>
+                            <pre style="margin-top: 10px; padding: 10px; background: white; border-radius: 5px; overflow-x: auto; font-size: 11px;">${data}</pre>
+                        </details>
+                    `;
+                }
+            });
+        }
+        
+        // 页面加载时生成默认二维码
+        window.onload = function() {
+            loadExample('message', 'login');
+            generateMessageQR();
+        };
+    </script>
+</body>
+</html>

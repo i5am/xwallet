@@ -1,0 +1,442 @@
+import * as bitcoin from 'bitcoinjs-lib';
+import { ECPairFactory } from 'ecpair';
+import { BIP32Factory } from 'bip32';
+import * as bip39 from 'bip39';
+import { DERIVATION_PATHS, btcToSatoshi, formatBTC } from '@/utils';
+import { NetworkType } from '@/types';
+import * as secp256k1 from '@noble/secp256k1';
+
+// 使用 @noble/secp256k1 创建 ECC 接口
+const ecc = {
+  isPoint: (p: Uint8Array): boolean => {
+    try {
+      secp256k1.Point.fromHex(p);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  isPrivate: (d: Uint8Array): boolean => {
+    return secp256k1.utils.isValidPrivateKey(d);
+  },
+  pointFromScalar: (d: Uint8Array, compressed?: boolean): Uint8Array | null => {
+    try {
+      const point = secp256k1.Point.fromPrivateKey(d);
+      return point.toRawBytes(compressed);
+    } catch {
+      return null;
+    }
+  },
+  pointAddScalar: (p: Uint8Array, tweak: Uint8Array, compressed?: boolean): Uint8Array | null => {
+    try {
+      const point = secp256k1.Point.fromHex(p);
+      const tweakBigInt = secp256k1.utils.bytesToNumberBE(tweak);
+      const tweakPoint = secp256k1.Point.fromPrivateKey(tweakBigInt);
+      const result = point.add(tweakPoint);
+      return result.toRawBytes(compressed);
+    } catch {
+      return null;
+    }
+  },
+  privateAdd: (d: Uint8Array, tweak: Uint8Array): Uint8Array | null => {
+    try {
+      const dNum = secp256k1.utils.bytesToNumberBE(d);
+      const tweakNum = secp256k1.utils.bytesToNumberBE(tweak);
+      const result = secp256k1.utils.mod(dNum + tweakNum, secp256k1.CURVE.n);
+      return secp256k1.utils.numberToBytesBE(result, 32);
+    } catch {
+      return null;
+    }
+  },
+  sign: (h: Uint8Array, d: Uint8Array, e?: Uint8Array): Uint8Array => {
+    return secp256k1.signSync(h, d, { der: false, extraEntropy: e });
+  },
+  signSchnorr: (h: Uint8Array, d: Uint8Array, e?: Uint8Array): Uint8Array => {
+    return secp256k1.schnorr.signSync(h, d, e);
+  },
+  verify: (h: Uint8Array, Q: Uint8Array, signature: Uint8Array, strict?: boolean): boolean => {
+    try {
+      return secp256k1.verify(signature, h, Q, { strict });
+    } catch {
+      return false;
+    }
+  },
+  verifySchnorr: (h: Uint8Array, Q: Uint8Array, signature: Uint8Array): boolean => {
+    try {
+      return secp256k1.schnorr.verify(signature, h, Q);
+    } catch {
+      return false;
+    }
+  },
+};
+
+// 初始化 bitcoinjs-lib
+bitcoin.initEccLib(ecc as any);
+const bip32 = BIP32Factory(ecc as any);
+
+/**
+ * BTC Taproot 适配器
+ */
+export class BTCAdapter {
+  private network: bitcoin.Network;
+  private apiBaseUrl: string;
+  
+  constructor(networkType: NetworkType = NetworkType.MAINNET) {
+    this.network = networkType === NetworkType.MAINNET 
+      ? bitcoin.networks.bitcoin 
+      : bitcoin.networks.testnet;
+    
+    this.apiBaseUrl = networkType === NetworkType.MAINNET
+      ? 'https://blockstream.info/api'
+      : 'https://blockstream.info/testnet/api';
+  }
+  
+  /**
+   * 从助记词生成 Taproot 地址
+   * 派生路径: m/86'/0'/0'/0/index (BIP86)
+   */
+  async generateTaprootAddress(mnemonic: string, index: number = 0): Promise<{
+    address: string;
+    privateKey: string;
+    publicKey: string;
+    path: string;
+  }> {
+    await initEcc(); // 确保 ecc 已初始化
+    
+    try {
+      // 助记词 → 种子
+      const seed = bip39.mnemonicToSeedSync(mnemonic);
+      
+      // 种子 → 根密钥
+      const root = bip32.fromSeed(seed, this.network);
+      
+      // BIP86 派生路径：m/86'/0'/0'/0/index
+      const path = DERIVATION_PATHS.BTC_TAPROOT.replace('/0', `/${index}`);
+      const child = root.derivePath(path);
+      
+      if (!child.privateKey) {
+        throw new Error('Failed to derive private key');
+      }
+      
+      // 生成 Taproot 地址 (P2TR)
+      const internalPubkey = child.publicKey.slice(1, 33); // x-only pubkey
+      const { address } = bitcoin.payments.p2tr({
+        internalPubkey,
+        network: this.network
+      });
+      
+      if (!address) {
+        throw new Error('Failed to generate Taproot address');
+      }
+      
+      return {
+        address,
+        privateKey: child.privateKey.toString('hex'),
+        publicKey: child.publicKey.toString('hex'),
+        path
+      };
+    } catch (error) {
+      throw new Error(`Failed to generate Taproot address: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * 从私钥恢复地址
+   */
+  async addressFromPrivateKey(privateKeyHex: string): Promise<string> {
+    await initEcc(); // 确保 ecc 已初始化
+    
+    try {
+      const privateKey = Buffer.from(privateKeyHex, 'hex');
+  const ECPair = ECPairFactory(ecc);
+  const keyPair = ECPair.fromPrivateKey(privateKey, { network: this.network });
+      const internalPubkey = Buffer.from(keyPair.publicKey.slice(1, 33));
+      const { address } = bitcoin.payments.p2tr({
+        internalPubkey,
+        network: this.network
+      });
+      if (!address) {
+        throw new Error('Failed to generate address from private key');
+      }
+      return address;
+    } catch (error) {
+      throw new Error(`Failed to recover address: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * 获取地址余额（satoshi）
+   */
+  async getBalance(address: string): Promise<number> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/address/${address}`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      const funded = data.chain_stats?.funded_txo_sum || 0;
+      const spent = data.chain_stats?.spent_txo_sum || 0;
+      
+      return funded - spent;
+    } catch (error) {
+      throw new Error(`Failed to get balance: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * 获取地址余额（BTC）
+   */
+  async getBalanceBTC(address: string): Promise<string> {
+    const satoshi = await this.getBalance(address);
+    return formatBTC(satoshi);
+  }
+  
+  /**
+   * 获取 UTXO 列表
+   */
+  async getUTXOs(address: string): Promise<UTXO[]> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/address/${address}/utxo`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Failed to get UTXOs: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * 估算当前网络手续费率
+   */
+  async estimateFeeRate(): Promise<number> {
+    try {
+      const response = await fetch('https://mempool.space/api/v1/fees/recommended');
+      
+      if (!response.ok) {
+        return 10; // 默认值 10 sat/vB
+      }
+      
+      const fees = await response.json();
+      return fees.halfHourFee || 10;
+    } catch {
+      return 10; // 默认值
+    }
+  }
+  
+  /**
+   * 构建并签名 Taproot 交易
+   */
+  async buildAndSignTransaction(params: {
+    from: string;
+    to: string;
+    amountBTC: string;
+    privateKey: string;
+    feeRate?: number;
+  }): Promise<string> {
+    await initEcc(); // 确保 ecc 已初始化
+    
+    try {
+      const { from, to, amountBTC, privateKey, feeRate } = params;
+      
+      // 1. 获取 UTXO
+      const utxos = await this.getUTXOs(from);
+      
+      if (utxos.length === 0) {
+        throw new Error('No UTXOs available');
+      }
+      
+      // 2. 准备私钥
+      const ECPair = ECPairFactory(ecc);
+      const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKey, 'hex'), { network: this.network });
+      const internalPubkey = Buffer.from(keyPair.publicKey.slice(1, 33));
+      
+      // 3. 创建 PSBT
+      const psbt = new bitcoin.Psbt({ network: this.network });
+      
+      // 4. 添加输入
+      let totalInput = 0;
+      for (const utxo of utxos) {
+        // 获取交易输出脚本
+        const txHex = await this.getTransactionHex(utxo.txid);
+        const tx = bitcoin.Transaction.fromHex(txHex);
+        
+        psbt.addInput({
+          hash: utxo.txid,
+          index: utxo.vout,
+          witnessUtxo: {
+            script: tx.outs[utxo.vout].script,
+            value: utxo.value
+          },
+          tapInternalKey: internalPubkey
+        });
+        
+        totalInput += utxo.value;
+      }
+      
+      // 5. 计算金额和手续费
+      const amount = btcToSatoshi(amountBTC);
+      const estimatedSize = this.estimateTransactionSize(utxos.length, 2);
+      const rate = feeRate || await this.estimateFeeRate();
+      const fee = Math.ceil(estimatedSize * rate);
+      const change = totalInput - amount - fee;
+      
+      if (change < 0) {
+        throw new Error(`Insufficient funds. Need ${formatBTC(amount + fee)} BTC, have ${formatBTC(totalInput)} BTC`);
+      }
+      
+      // 6. 添加输出
+      psbt.addOutput({
+        address: to,
+        value: amount
+      });
+      
+      // 7. 添加找零输出（如果找零大于 dust limit）
+      if (change > 546) {
+        psbt.addOutput({
+          address: from,
+          value: change
+        });
+      }
+      
+      // 8. 签名所有输入
+      for (let i = 0; i < utxos.length; i++) {
+        psbt.signInput(i, keyPair as any); // Type assertion for compatibility
+      }
+      
+      // 9. 完成并提取交易
+      psbt.finalizeAllInputs();
+      const tx = psbt.extractTransaction();
+      
+      return tx.toHex();
+    } catch (error) {
+      throw new Error(`Failed to build transaction: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * 广播交易
+   */
+  async broadcastTransaction(txHex: string): Promise<string> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/tx`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+        body: txHex
+      });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || response.statusText);
+      }
+      
+      return await response.text(); // 返回 txid
+    } catch (error) {
+      throw new Error(`Failed to broadcast transaction: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * 获取交易详情（十六进制）
+   */
+  private async getTransactionHex(txid: string): Promise<string> {
+    const response = await fetch(`${this.apiBaseUrl}/tx/${txid}/hex`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get transaction: ${response.statusText}`);
+    }
+    
+    return await response.text();
+  }
+  
+  /**
+   * 估算交易大小（vBytes）
+   */
+  private estimateTransactionSize(inputs: number, outputs: number): number {
+    // Taproot: ~57.5 vBytes per input, ~43 vBytes per output
+    return Math.ceil(inputs * 57.5 + outputs * 43 + 10.5);
+  }
+  
+  /**
+   * 获取交易历史
+   */
+  async getTransactionHistory(address: string): Promise<BTCTransaction[]> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/address/${address}/txs`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+      
+      const txs = await response.json();
+      return txs.map((tx: any) => this.parseTransaction(tx, address));
+    } catch (error) {
+      throw new Error(`Failed to get transaction history: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * 解析交易数据
+   */
+  private parseTransaction(tx: any, address: string): BTCTransaction {
+    // 计算发送和接收金额
+    let sent = 0;
+    let received = 0;
+    
+    // 检查输入
+    for (const vin of tx.vin) {
+      if (vin.prevout?.scriptpubkey_address === address) {
+        sent += vin.prevout.value;
+      }
+    }
+    
+    // 检查输出
+    for (const vout of tx.vout) {
+      if (vout.scriptpubkey_address === address) {
+        received += vout.value;
+      }
+    }
+    
+    const amount = received - sent;
+    
+    return {
+      txid: tx.txid,
+      amount: formatBTC(Math.abs(amount)),
+      type: amount > 0 ? 'receive' : 'send',
+      timestamp: tx.status.block_time * 1000,
+      confirmations: tx.status.confirmed ? tx.status.block_height : 0,
+      fee: formatBTC(tx.fee || 0)
+    };
+  }
+}
+
+/**
+ * UTXO 接口
+ */
+export interface UTXO {
+  txid: string;
+  vout: number;
+  value: number;
+  status: {
+    confirmed: boolean;
+    block_height?: number;
+  };
+}
+
+/**
+ * BTC 交易接口
+ */
+export interface BTCTransaction {
+  txid: string;
+  amount: string;
+  type: 'send' | 'receive';
+  timestamp: number;
+  confirmations: number;
+  fee: string;
+}

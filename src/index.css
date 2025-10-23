@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #f5f5f5;
+  overflow-x: hidden;
+}
+
+#root {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1rem;
+  min-height: 100vh;
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  #root {
+    padding: 0.5rem;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-3 rounded-lg font-medium transition-all duration-200 cursor-pointer touch-manipulation;
+    min-height: 48px; /* 增大点击区域 */
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  .btn-primary {
+    @apply btn bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600;
+  }
+  
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 active:bg-red-800;
+  }
+  
+  .input {
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-600;
+    min-height: 48px; /* 增大输入区域 */
+  }
+  
+  .card {
+    @apply bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 mb-4;
+  }
+}
+
+/* 对话框遮罩层优化 - 支持滚动 */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 1rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dialog-content {
+  margin: auto 0;
+  width: 100%;
+  max-width: 28rem;
+}
+
+/* 移动端按钮优化 */
+@media (max-width: 768px) {
+  .btn {
+    font-size: 16px; /* 防止 iOS 自动缩放 */
+  }
+  
+  .card {
+    @apply p-3;
+  }
+  
+  .dialog-overlay {
+    padding: 0.5rem;
+  }
+}

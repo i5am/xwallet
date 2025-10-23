@@ -1,0 +1,203 @@
+import * as bip39 from 'bip39';
+import { DERIVATION_PATHS } from '@/utils';
+import { NetworkType } from '@/types';
+import * as secp from '@noble/secp256k1';
+import { sha256 } from '@noble/hashes/sha256';
+import { ripemd160 } from '@noble/hashes/ripemd160';
+
+/**
+ * 简化版 BTC 适配器 - 直接实现,不依赖 bitcoinjs-lib
+ * 专为鸿蒙系统优化
+ */
+export class BTCAdapter {
+  private networkType: NetworkType;
+  private apiBaseUrl: string;
+  
+  constructor(networkType: NetworkType = NetworkType.MAINNET) {
+    this.networkType = networkType;
+    this.apiBaseUrl = networkType === NetworkType.MAINNET
+      ? 'https://blockstream.info/api'
+      : 'https://blockstream.info/testnet/api';
+  }
+  
+  /**
+   * 从助记词派生私钥 (简化版 BIP32)
+   */
+  private derivePrivateKey(mnemonic: string, path: string): Uint8Array {
+    // 对于演示目的,使用简化的派生
+    // 生产环境应该使用完整的 BIP32/BIP44 实现
+    const seed = bip39.mnemonicToSeedSync(mnemonic);
+    
+    // 使用种子的前 32 字节作为主私钥
+    const masterKey = seed.slice(0, 32);
+    
+    // 简单的路径派生 (非标准,仅用于演示)
+    const pathHash = sha256(new TextEncoder().encode(path));
+    const derived = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      derived[i] = masterKey[i] ^ pathHash[i];
+    }
+    
+    return derived;
+  }
+  
+  /**
+   * 生成 P2PKH (传统) 地址
+   * 更简单且兼容性更好
+   */
+  generateAddress(mnemonic: string, index: number = 0): {
+    address: string;
+    privateKey: string;
+    publicKey: string;
+    path: string;
+  } {
+    try {
+      const path = `m/44'/0'/0'/0/${index}`;
+      const privateKey = this.derivePrivateKey(mnemonic, path);
+      const publicKey = secp.getPublicKey(privateKey, true);
+      
+      // 生成 P2PKH 地址
+      const pubKeyHash = ripemd160(sha256(publicKey));
+      
+      // 添加版本字节 (0x00 for mainnet, 0x6f for testnet)
+      const version = this.networkType === NetworkType.MAINNET ? 0x00 : 0x6f;
+      const versionedHash = new Uint8Array(21);
+      versionedHash[0] = version;
+      versionedHash.set(pubKeyHash, 1);
+      
+      // 计算校验和
+      const checksum = sha256(sha256(versionedHash)).slice(0, 4);
+      
+      // 组合并 Base58 编码
+      const addressBytes = new Uint8Array(25);
+      addressBytes.set(versionedHash, 0);
+      addressBytes.set(checksum, 21);
+      
+      const address = this.base58Encode(addressBytes);
+      
+      return {
+        address,
+        privateKey: this.bytesToHex(privateKey),
+        publicKey: this.bytesToHex(publicKey),
+        path
+      };
+    } catch (error) {
+      console.error('❌ 地址生成失败:', error);
+      throw new Error(`Failed to generate address: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * Taproot 地址生成 (简化版)
+   */
+  generateTaprootAddress(mnemonic: string, index: number = 0): {
+    address: string;
+    privateKey: string;
+    publicKey: string;
+    path: string;
+  } {
+    // 暂时返回普通地址
+    // Taproot 需要更复杂的实现
+    console.warn('⚠️ Taproot 暂不支持,使用 P2PKH 地址');
+    return this.generateAddress(mnemonic, index);
+  }
+  
+  /**
+   * 从私钥恢复地址
+   */
+  addressFromPrivateKey(privateKeyHex: string): string {
+    try {
+      const privateKey = this.hexToBytes(privateKeyHex);
+      const publicKey = secp.getPublicKey(privateKey, true);
+      const pubKeyHash = ripemd160(sha256(publicKey));
+      
+      const version = this.networkType === NetworkType.MAINNET ? 0x00 : 0x6f;
+      const versionedHash = new Uint8Array(21);
+      versionedHash[0] = version;
+      versionedHash.set(pubKeyHash, 1);
+      
+      const checksum = sha256(sha256(versionedHash)).slice(0, 4);
+      const addressBytes = new Uint8Array(25);
+      addressBytes.set(versionedHash, 0);
+      addressBytes.set(checksum, 21);
+      
+      return this.base58Encode(addressBytes);
+    } catch (error) {
+      throw new Error(`Failed to recover address: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * 获取地址余额
+   */
+  async getBalance(address: string): Promise<number> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/address/${address}`);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+      const data = await response.json();
+      const funded = data.chain_stats?.funded_txo_sum || 0;
+      const spent = data.chain_stats?.spent_txo_sum || 0;
+      return funded - spent;
+    } catch (error) {
+      throw new Error(`Failed to fetch balance: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * 获取交易列表
+   */
+  async getTransactions(address: string): Promise<any[]> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/address/${address}/txs`);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to fetch transactions:', error);
+      return [];
+    }
+  }
+  
+  // 辅助方法
+  private hexToBytes(hex: string): Uint8Array {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < hex.length; i += 2) {
+      bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+    }
+    return bytes;
+  }
+  
+  private bytesToHex(bytes: Uint8Array): string {
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  
+  // Base58 编码
+  private base58Encode(bytes: Uint8Array): string {
+    const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    const base = BigInt(58);
+    
+    let num = BigInt(0);
+    for (let i = 0; i < bytes.length; i++) {
+      num = num * BigInt(256) + BigInt(bytes[i]);
+    }
+    
+    let encoded = '';
+    while (num > 0) {
+      const remainder = Number(num % base);
+      num = num / base;
+      encoded = ALPHABET[remainder] + encoded;
+    }
+    
+    // 添加前导 1 (对应前导 0 字节)
+    for (let i = 0; i < bytes.length && bytes[i] === 0; i++) {
+      encoded = '1' + encoded;
+    }
+    
+    return encoded;
+  }
+}
+
+console.log('✅ BTCAdapter-simple 已加载');
