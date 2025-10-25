@@ -6,17 +6,17 @@
     <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: gap: content: capacitor: ionic:; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline';">
     <title>WDK Wallet</title>
     
-    <!-- ⚠️ 关键修复: 从 CDN 加载完整的 Buffer polyfill -->
-    <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.js"></script>
+    <!-- ⚠️ 离线 Buffer polyfill - 支持冷钱包离线运行 -->
+    <script src="/buffer.min.js"></script>
     <script>
-      // 使用 CDN 加载的 Buffer
+      // 使用本地加载的 Buffer
       (function() {
         if (typeof window.buffer !== 'undefined' && window.buffer.Buffer) {
           window.Buffer = window.buffer.Buffer;
           if (typeof globalThis !== 'undefined') {
             globalThis.Buffer = window.buffer.Buffer;
           }
-          console.log('[INIT] ✅ Buffer from CDN:', typeof window.Buffer);
+          console.log('[INIT] ✅ Buffer loaded offline:', typeof window.Buffer);
           console.log('[INIT] ✅ Buffer.alloc:', typeof window.Buffer.alloc);
         }
         
@@ -39,7 +39,7 @@
           globalThis.process = processShim;
         }
         
-        console.log('[INIT] ✅ All polyfills ready');
+        console.log('[INIT] ✅ All polyfills ready (OFFLINE MODE)');
       })();
     </script>
     
