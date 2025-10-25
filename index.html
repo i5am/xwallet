@@ -22,6 +22,47 @@
       window.process = processShim;
       globalThis.process = processShim;
       
+      // ⚠️ 临时 Buffer polyfill (在真正的 Buffer 加载前提供基础功能)
+      // 这样可以避免"Can't find variable: Buffer"错误
+      if (typeof Buffer === 'undefined') {
+        window.Buffer = {
+          from: function(data, encoding) {
+            if (typeof data === 'string') {
+              return new Uint8Array(new TextEncoder().encode(data));
+            }
+            return new Uint8Array(data);
+          },
+          alloc: function(size, fill) {
+            const buf = new Uint8Array(size);
+            if (fill !== undefined) {
+              buf.fill(fill);
+            }
+            return buf;
+          },
+          allocUnsafe: function(size) {
+            return new Uint8Array(size);
+          },
+          concat: function(list, totalLength) {
+            if (list.length === 0) return new Uint8Array(0);
+            if (totalLength === undefined) {
+              totalLength = list.reduce((sum, buf) => sum + buf.length, 0);
+            }
+            const result = new Uint8Array(totalLength);
+            let offset = 0;
+            for (const buf of list) {
+              result.set(buf, offset);
+              offset += buf.length;
+            }
+            return result;
+          },
+          isBuffer: function(obj) {
+            return obj instanceof Uint8Array;
+          }
+        };
+        globalThis.Buffer = window.Buffer;
+        console.log('[INIT] ⚠️ Temporary Buffer polyfill loaded');
+      }
+      
       console.log('[INIT] ✅ Polyfills initialized');
     </script>
     
