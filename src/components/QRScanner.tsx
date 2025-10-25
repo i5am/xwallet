@@ -49,10 +49,10 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose }) => {
       document.querySelector('body')?.classList.add('barcode-scanner-active');
       
       // 开始扫描
-      const listener = await BarcodeScanner.addListener('barcodeScanned', (result) => {
-        console.log('Barcode scanned:', result);
-        if (result.barcode && result.barcode.rawValue) {
-          onScan(result.barcode.rawValue);
+      await BarcodeScanner.addListener('barcodesScanned', (result: { barcodes: Array<{ rawValue?: string }> }) => {
+        console.log('Barcodes scanned:', result);
+        if (result.barcodes && result.barcodes.length > 0 && result.barcodes[0].rawValue) {
+          onScan(result.barcodes[0].rawValue);
           stopScan();
         }
       });

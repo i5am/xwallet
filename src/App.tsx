@@ -3,7 +3,7 @@ import { Wallet, WalletType, ChainType, NetworkType } from './types';
 import * as bip39 from 'bip39';
 import QRCode from 'qrcode';
 import jsQR from 'jsqr';
-// import { BTCAdapter } from './services/blockchain/BTCAdapter-harmonyos'; // 暂时禁用 BTC
+import { BTCAdapter } from './services/blockchain/BTCAdapter-harmonyos';
 import { ETHAdapter } from './services/blockchain/ETHAdapter';
 import { FlightsparkAdapter } from './services/flightspark/FlightsparkAdapter';
 import { AIServicePayment } from './types/flightspark';
