@@ -4,6 +4,7 @@ import path from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: './',  // 使用相对路径,兼容 iOS capacitor:// scheme
   plugins: [
     react(),
   ],
