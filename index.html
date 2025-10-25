@@ -5,6 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: gap: content: capacitor: ionic:; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline';">
     <title>WDK Wallet</title>
+    
+    <!-- ⚠️ 关键修复: 必须在模块脚本加载前初始化全局变量 -->
+    <script>
+      // 立即初始化,不等待任何加载
+      (function() {
+        // 1. 设置 global
+        window.global = window;
+        if (typeof globalThis !== 'undefined') {
+          globalThis.global = globalThis;
+        }
+        
+        // 2. 设置 process
+        const processShim = { 
+          env: {},
+          version: '16.0.0',
+          platform: 'browser',
+          nextTick: function(fn) { 
+            Promise.resolve().then(fn);
+          }
+        };
+        window.process = processShim;
+        if (typeof globalThis !== 'undefined') {
+          globalThis.process = processShim;
+        }
+        
+        // 3. 简化的 Buffer polyfill (关键!)
+        // 这个简化版足以让模块加载不崩溃
+        if (typeof window.Buffer === 'undefined') {
+          window.Buffer = function Buffer() {
+            // 占位符,真正的实现由 buffer 包提供
+          };
+          window.Buffer.isBuffer = function(obj) {
+            return false;
+          };
+          window.Buffer.from = function(data) {
+            return new Uint8Array(0);
+          };
+        }
+        if (typeof globalThis !== 'undefined' && typeof globalThis.Buffer === 'undefined') {
+          globalThis.Buffer = window.Buffer;
+        }
+        
+        console.log('[INIT] ✅ Global polyfills ready');
+        console.log('[INIT] global:', typeof window.global);
+        console.log('[INIT] process:', typeof window.process);
+        console.log('[INIT] Buffer:', typeof window.Buffer);
+      })();
+    </script>
+    
     <style>
       body {
         margin: 0;
