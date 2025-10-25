@@ -6,17 +6,26 @@
     <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: gap: content: capacitor: ionic:; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline';">
     <title>WDK Wallet</title>
     
-    <!-- ⚠️ 关键修复: 必须在模块脚本加载前初始化全局变量 -->
+    <!-- ⚠️ 关键修复: 从 CDN 加载完整的 Buffer polyfill -->
+    <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.js"></script>
     <script>
-      // 立即初始化,不等待任何加载
+      // 使用 CDN 加载的 Buffer
       (function() {
-        // 1. 设置 global
+        if (typeof window.buffer !== 'undefined' && window.buffer.Buffer) {
+          window.Buffer = window.buffer.Buffer;
+          if (typeof globalThis !== 'undefined') {
+            globalThis.Buffer = window.buffer.Buffer;
+          }
+          console.log('[INIT] ✅ Buffer from CDN:', typeof window.Buffer);
+          console.log('[INIT] ✅ Buffer.alloc:', typeof window.Buffer.alloc);
+        }
+        
+        // 设置其他全局变量
         window.global = window;
         if (typeof globalThis !== 'undefined') {
           globalThis.global = globalThis;
         }
         
-        // 2. 设置 process
         const processShim = { 
           env: {},
           version: '16.0.0',
@@ -30,27 +39,7 @@
           globalThis.process = processShim;
         }
         
-        // 3. 简化的 Buffer polyfill (关键!)
-        // 这个简化版足以让模块加载不崩溃
-        if (typeof window.Buffer === 'undefined') {
-          window.Buffer = function Buffer() {
-            // 占位符,真正的实现由 buffer 包提供
-          };
-          window.Buffer.isBuffer = function(obj) {
-            return false;
-          };
-          window.Buffer.from = function(data) {
-            return new Uint8Array(0);
-          };
-        }
-        if (typeof globalThis !== 'undefined' && typeof globalThis.Buffer === 'undefined') {
-          globalThis.Buffer = window.Buffer;
-        }
-        
-        console.log('[INIT] ✅ Global polyfills ready');
-        console.log('[INIT] global:', typeof window.global);
-        console.log('[INIT] process:', typeof window.process);
-        console.log('[INIT] Buffer:', typeof window.Buffer);
+        console.log('[INIT] ✅ All polyfills ready');
       })();
     </script>
     
