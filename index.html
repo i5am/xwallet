@@ -6,41 +6,23 @@
     <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: gap: content: capacitor: ionic:; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline';">
     <title>WDK Wallet</title>
     
-    <!-- ⚠️ 离线 Buffer polyfill - 支持冷钱包离线运行 -->
-    <script src="/buffer.min.js"></script>
     <script>
-      // 使用本地加载的 Buffer
-      (function() {
-        if (typeof window.buffer !== 'undefined' && window.buffer.Buffer) {
-          window.Buffer = window.buffer.Buffer;
-          if (typeof globalThis !== 'undefined') {
-            globalThis.Buffer = window.buffer.Buffer;
-          }
-          console.log('[INIT] ✅ Buffer loaded offline:', typeof window.Buffer);
-          console.log('[INIT] ✅ Buffer.alloc:', typeof window.Buffer.alloc);
+      // ⚠️ 必须在加载任何模块之前初始化全局变量
+      window.global = window;
+      globalThis.global = globalThis;
+      
+      const processShim = { 
+        env: {},
+        version: '16.0.0',
+        platform: 'browser',
+        nextTick: function(fn) { 
+          Promise.resolve().then(fn);
         }
-        
-        // 设置其他全局变量
-        window.global = window;
-        if (typeof globalThis !== 'undefined') {
-          globalThis.global = globalThis;
-        }
-        
-        const processShim = { 
-          env: {},
-          version: '16.0.0',
-          platform: 'browser',
-          nextTick: function(fn) { 
-            Promise.resolve().then(fn);
-          }
-        };
-        window.process = processShim;
-        if (typeof globalThis !== 'undefined') {
-          globalThis.process = processShim;
-        }
-        
-        console.log('[INIT] ✅ All polyfills ready (OFFLINE MODE)');
-      })();
+      };
+      window.process = processShim;
+      globalThis.process = processShim;
+      
+      console.log('[INIT] ✅ Polyfills initialized');
     </script>
     
     <style>
