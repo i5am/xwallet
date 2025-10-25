@@ -308,4 +308,81 @@ export class BTCAdapter {
       return [];
     }
   }
+  
+  /**
+   * 获取 UTXO 列表
+   */
+  async getUTXOs(address: string): Promise<any[]> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/address/${address}/utxo`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Failed to fetch UTXOs: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * 获取推荐手续费率
+   */
+  async getSuggestedFeeRate(): Promise<{
+    low: number;
+    medium: number;
+    high: number;
+  }> {
+    try {
+      const response = await fetch('https://mempool.space/api/v1/fees/recommended');
+      
+      if (!response.ok) {
+        // 如果 API 失败,返回默认值
+        return { low: 1, medium: 5, high: 10 };
+      }
+      
+      const fees = await response.json();
+      return {
+        low: fees.economyFee || 1,
+        medium: fees.hourFee || 5,
+        high: fees.fastestFee || 10,
+      };
+    } catch (error) {
+      console.error('Failed to fetch fee rate:', error);
+      return { low: 1, medium: 5, high: 10 };
+    }
+  }
+  
+  /**
+   * 广播交易
+   */
+  async broadcastTransaction(txHex: string): Promise<string> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/tx`, {
+        method: 'POST',
+        body: txHex,
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Broadcast failed: ${errorText}`);
+      }
+      
+      return await response.text(); // 返回 txid
+    } catch (error) {
+      throw new Error(`Failed to broadcast transaction: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * 估算交易大小 (简化版本)
+   */
+  estimateTransactionSize(inputCount: number, outputCount: number): number {
+    // Taproot 交易大小估算
+    // 基础: 10 bytes
+    // 每个输入: ~57 bytes
+    // 每个输出: ~43 bytes
+    return 10 + (inputCount * 57) + (outputCount * 43);
+  }
 }

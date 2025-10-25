@@ -45,5 +45,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>需要使用相机扫描二维码进行交易签名和地址识别</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>需要访问相册以选择二维码图片</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>需要保存二维码到相册</string>
 </dict>
 </plist>

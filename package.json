@@ -20,7 +20,9 @@
     "eas:build:production": "eas build --platform ios --profile production"
   },
   "dependencies": {
+    "@capacitor-mlkit/barcode-scanning": "^7.3.0",
     "@capacitor/android": "^7.4.3",
+    "@capacitor/camera": "^7.0.2",
     "@capacitor/cli": "^7.4.3",
     "@capacitor/core": "^7.4.3",
     "@capacitor/ios": "^7.4.4",

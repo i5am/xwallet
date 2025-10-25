@@ -103,3 +103,13 @@ body {
     padding: 0.5rem;
   }
 }
+
+/* 二维码扫描器激活时隐藏应用内容 */
+body.barcode-scanner-active {
+  visibility: hidden;
+  background-color: transparent !important;
+}
+
+body.barcode-scanner-active .barcode-scanner-modal {
+  visibility: visible;
+}

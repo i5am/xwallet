@@ -15,6 +15,8 @@ import { Wallet as WalletIcon, Plus, ArrowUpRight, ArrowDownLeft, Settings, Zap,
 function App() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [selectedWallet, setSelectedWallet] = useState<Wallet | null>(null);
+  const [walletBalance, setWalletBalance] = useState<string>('0.00');
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const [showCreateWallet, setShowCreateWallet] = useState(false);
   const [showSendDialog, setShowSendDialog] = useState(false);
   const [showReceiveDialog, setShowReceiveDialog] = useState(false);
@@ -62,6 +64,46 @@ function App() {
     }
   }, [showReceiveDialog, selectedWallet, useProtocolFormat]);
 
+  // 刷新钱包余额
+  const refreshBalance = async (wallet: Wallet) => {
+    if (!wallet || wallet.type === WalletType.COLD) {
+      // 冷钱包不查询余额(离线)
+      setWalletBalance('--');
+      return;
+    }
+
+    setIsLoadingBalance(true);
+    try {
+      const networkConfig = getNetworkConfig(wallet.chain, wallet.network);
+      
+      if (wallet.chain === ChainType.BTC) {
+        const btcAdapter = new BTCAdapter(wallet.network);
+        const balanceSat = await btcAdapter.getBalance(wallet.address);
+        const balanceBTC = (balanceSat / 100000000).toFixed(8);
+        setWalletBalance(balanceBTC);
+      } else {
+        const ethAdapter = new ETHAdapter(networkConfig.rpcUrl, wallet.network);
+        const balanceWei = await ethAdapter.getBalance(wallet.address);
+        const balanceETH = (Number(balanceWei) / 1e18).toFixed(4);
+        setWalletBalance(balanceETH);
+      }
+    } catch (error) {
+      console.error('刷新余额失败:', error);
+      setWalletBalance('0.00');
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  };
+
+  // 当选中钱包改变时刷新余额
+  useEffect(() => {
+    if (selectedWallet) {
+      refreshBalance(selectedWallet);
+    } else {
+      setWalletBalance('0.00');
+    }
+  }, [selectedWallet]);
+
   // 创建新钱包
   const createWallet = async (type: WalletType, chain: ChainType) => {
     try {
@@ -74,13 +116,11 @@ function App() {
       let publicKey = '';
 
       if (chain === ChainType.BTC) {
-        alert('⚠️ BTC 功能暂不支持鸿蒙系统\n请选择 ETH 或 Polygon');
-        return;
-        // const btcAdapter = new BTCAdapter(network);
-        // const walletData = btcAdapter.generateTaprootAddress(mnemonic);
-        // address = walletData.address;
-        // privateKey = walletData.privateKey;
-        // publicKey = walletData.publicKey;
+        const btcAdapter = new BTCAdapter(network);
+        const walletData = btcAdapter.generateTaprootAddress(mnemonic);
+        address = walletData.address;
+        privateKey = walletData.privateKey;
+        publicKey = walletData.publicKey;
       } else {
         const ethAdapter = new ETHAdapter(networkConfig.rpcUrl, network);
         const walletData = ethAdapter.generateAddress(mnemonic);
@@ -91,7 +131,7 @@ function App() {
 
       const newWallet: Wallet = {
         id: Date.now().toString(),
-        name: `ETH ${type === WalletType.HOT ? '热' : type === WalletType.COLD ? '冷' : '观测'}钱包`,
+        name: `${chain === ChainType.BTC ? 'BTC' : 'ETH'} ${type === WalletType.HOT ? '热' : type === WalletType.COLD ? '冷' : '观测'}钱包`,
         type,
         chain,
         network,
@@ -131,15 +171,18 @@ function App() {
 
         // 验证助记词
         if (!bip39.validateMnemonic(importMnemonic.trim())) {
-          alert('❌ 助记词格式不正确，请检查！');
+          alert('❌ 助记词格式不正确,请检查!');
           return;
         }
 
         mnemonic = importMnemonic.trim();
 
         if (importChain === ChainType.BTC) {
-          alert('⚠️ BTC 功能暂不支持鸿蒙系统\n请选择 ETH 或 Polygon');
-          return;
+          const btcAdapter = new BTCAdapter(network);
+          const walletData = btcAdapter.generateTaprootAddress(mnemonic);
+          address = walletData.address;
+          privateKey = walletData.privateKey;
+          publicKey = walletData.publicKey;
         } else {
           const ethAdapter = new ETHAdapter(networkConfig.rpcUrl, network);
           const walletData = ethAdapter.generateAddress(mnemonic);
@@ -157,8 +200,9 @@ function App() {
         privateKey = importPrivateKey.trim();
 
         if (importChain === ChainType.BTC) {
-          alert('⚠️ BTC 功能暂不支持鸿蒙系统\n请选择 ETH 或 Polygon');
-          return;
+          const btcAdapter = new BTCAdapter(network);
+          address = btcAdapter.addressFromPrivateKey(privateKey);
+          publicKey = privateKey.substring(0, 66); // BTC 公钥较短
         } else {
           const ethAdapter = new ETHAdapter(networkConfig.rpcUrl, network);
           address = ethAdapter.addressFromPrivateKey(privateKey);
@@ -169,7 +213,7 @@ function App() {
       // 创建钱包对象
       const newWallet: Wallet = {
         id: Date.now().toString(),
-        name: `ETH ${importWalletType === WalletType.HOT ? '热' : '冷'}钱包 (导入)`,
+        name: `${importChain === ChainType.BTC ? 'BTC' : 'ETH'} ${importWalletType === WalletType.HOT ? '热' : '冷'}钱包 (导入)`,
         type: importWalletType,
         chain: importChain,
         network,
@@ -257,27 +301,31 @@ function App() {
       const networkConfig = getNetworkConfig(wallet.chain, wallet.network);
       
       if (wallet.chain === ChainType.BTC) {
-        alert('⚠️ BTC 功能暂不支持,请使用 ETH 钱包');
+        const btcAdapter = new BTCAdapter(wallet.network);
+        balance = await btcAdapter.getBalance(wallet.address);
+        
+        // BTC Lightning Network 提示
+        alert('⚠️ Lightning Network 功能开发中\n\n当前可以:\n✅ 创建 BTC 钱包\n✅ 查看余额\n✅ 发送普通交易\n\n闪电网络支付即将推出!');
         return;
       } else {
         const ethAdapter = new ETHAdapter(networkConfig.rpcUrl, wallet.network);
         const balanceWei = await ethAdapter.getBalance(wallet.address);
         balance = Number(balanceWei);
         
-        // 对于 ETH，Lightning Network 不适用
-        alert('⚠️ 提示：Lightning Network 主要用于 BTC 支付。\n\n对于 ETH 支付，建议使用普通的"发送"功能。');
+        // 对于 ETH, Lightning Network 不适用
+        alert('⚠️ 提示: Lightning Network 主要用于 BTC 支付。\n\n对于 ETH 支付,建议使用普通的"发送"功能。');
         return;
       }
 
       // 2. 确认支付
-      const confirmMsg = `确认 AI 服务支付：\n\n` +
+      const confirmMsg = `确认 AI 服务支付:\n\n` +
         `💰 当前余额: ${balance} satoshis\n` +
         `💸 支付金额: ${aiPaymentAmount} satoshis\n` +
         `📍 AI 地址: ${aiWalletAddress.substring(0, 20)}...\n` +
         `🔧 服务类型: ${aiServiceType}\n\n` +
-        `⚠️ 注意：这是演示版本，实际不会执行真实支付。\n` +
-        `在生产环境中，需要集成真实的 Lightning Network 节点。\n\n` +
-        `是否继续？`;
+        `⚠️ 注意: 这是演示版本,实际不会执行真实支付。\n` +
+        `在生产环境中,需要集成真实的 Lightning Network 节点。\n\n` +
+        `是否继续?`;
 
       if (!confirm(confirmMsg)) {
         return;
@@ -911,17 +959,39 @@ function App() {
                     钱包详情
                   </h2>
                   <div className="text-center py-8">
-                    <div className="text-5xl font-bold text-gray-800 dark:text-white mb-2">
-                      0.00
+                    <div className="text-5xl font-bold text-gray-800 dark:text-white mb-2 flex items-center justify-center gap-3">
+                      {isLoadingBalance ? (
+                        <div className="animate-spin">⏳</div>
+                      ) : (
+                        walletBalance
+                      )}
+                      {selectedWallet.type === WalletType.COLD && !isLoadingBalance && (
+                        <button
+                          onClick={() => refreshBalance(selectedWallet)}
+                          className="text-sm btn-secondary px-3 py-1"
+                          title="刷新余额"
+                        >
+                          🔄
+                        </button>
+                      )}
                     </div>
                     <div className="text-gray-600 dark:text-gray-400">
                       {selectedWallet.chain === ChainType.BTC ? 'BTC' : 'ETH'}
                     </div>
-                    <div className="mt-4 px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg">
-                      <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                        ⚠️ 当前余额为 0，请先向钱包充值后再进行支付操作
-                      </p>
-                    </div>
+                    {selectedWallet.type === WalletType.COLD && (
+                      <div className="mt-4 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg">
+                        <p className="text-sm text-blue-800 dark:text-blue-200">
+                          ❄️ 冷钱包模式 - 点击 🔄 手动查询余额
+                        </p>
+                      </div>
+                    )}
+                    {Number(walletBalance) === 0 && selectedWallet.type === WalletType.HOT && !isLoadingBalance && (
+                      <div className="mt-4 px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg">
+                        <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                          ⚠️ 当前余额为 0,请先向钱包充值后再进行支付操作
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 mt-6">
