@@ -4,9 +4,26 @@ import 'regenerator-runtime/runtime';
 
 // 必须最先导入 Buffer polyfill
 import { Buffer } from 'buffer';
-(window as any).Buffer = Buffer;
-(window as any).global = window;
-(window as any).process = { env: {} };
+
+// 确保 Buffer 全局可用
+if (typeof window !== 'undefined') {
+  (window as any).Buffer = Buffer;
+  if (!(window as any).global) {
+    (window as any).global = window;
+  }
+  if (!(window as any).process) {
+    (window as any).process = { 
+      env: {},
+      version: '16.0.0',
+      nextTick: (fn: Function) => setTimeout(fn, 0)
+    };
+  }
+}
+
+// 全局 Buffer 也要设置
+if (typeof globalThis !== 'undefined') {
+  (globalThis as any).Buffer = Buffer;
+}
 
 // 移除调试信息
 console.log('🚀 WDK Wallet 启动中...');

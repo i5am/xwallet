@@ -60,6 +60,14 @@
     <div id="root"></div>
     
     <script>
+      // ⚠️ 必须在加载任何模块之前初始化 Buffer
+      window.global = window;
+      window.process = { 
+        env: {},
+        version: '',
+        nextTick: function(fn) { setTimeout(fn, 0); }
+      };
+      
       // 调试系统
       const debugPanel = document.getElementById('debug-panel');
       let logCount = 0;
