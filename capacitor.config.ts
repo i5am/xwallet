@@ -1,11 +1,12 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.tether.wdk.wallet',
-  appName: 'Tether WDK Wallet',
+  appId: 'com.ex1.x1wallet',  // 与 Xcode 项目保持一致
+  appName: 'x1wallet',
   webDir: 'dist',
   server: {
-    androidScheme: 'http',  // 鸿蒙系统使用 http 更稳定
+    androidScheme: 'http',
+    iosScheme: 'capacitor',  // iOS 使用 capacitor scheme
     hostname: 'localhost',
     cleartext: true,
   },
@@ -18,7 +19,8 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: 'automatic',
     scrollEnabled: true,
-    allowsLinkPreview: false
+    allowsLinkPreview: false,
+    limitsNavigationsToAppBoundDomains: false  // 允许加载本地资源
   },
   plugins: {
     SplashScreen: {
