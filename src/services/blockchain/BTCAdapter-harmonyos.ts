@@ -75,6 +75,20 @@ const ecc = {
     return Buffer.from(negated.toString(16).padStart(64, '0'), 'hex');
   },
   
+  pointMultiply(p: Uint8Array, tweak: Uint8Array, compressed?: boolean): Uint8Array | null {
+    try {
+      if (!secp.utils.isValidPrivateKey(tweak)) return null;
+      const point = secp.Point.fromHex(Buffer.from(p).toString('hex'));
+      const tweakNum = BigInt('0x' + Buffer.from(tweak).toString('hex'));
+      const result = point.multiply(tweakNum);
+      if (result.equals(secp.Point.ZERO)) return null;
+      const hex = result.toHex(compressed !== false);
+      return Buffer.from(hex, 'hex');
+    } catch {
+      return null;
+    }
+  },
+  
   pointCompress(p: Uint8Array, compressed?: boolean): Uint8Array {
     try {
       const point = secp.Point.fromHex(Buffer.from(p).toString('hex'));
