@@ -16,7 +16,13 @@ secp.utils.hmacSha256Sync = (key: Uint8Array, ...messages: Uint8Array[]) => {
   return h.digest();
 };
 
-// 创建 ECC 接口适配器
+secp.utils.sha256Sync = (...messages: Uint8Array[]) => {
+  const h = sha256.create();
+  messages.forEach(msg => h.update(msg));
+  return h.digest();
+};
+
+// 创建完整的 ECC 接口适配器
 const ecc = {
   isPoint(p: Uint8Array): boolean {
     try {
@@ -63,13 +69,82 @@ const ecc = {
     }
   },
   
+  privateNegate(d: Uint8Array): Uint8Array {
+    const dNum = BigInt('0x' + Buffer.from(d).toString('hex'));
+    const negated = secp.CURVE.n - dNum;
+    return Buffer.from(negated.toString(16).padStart(64, '0'), 'hex');
+  },
+  
+  pointCompress(p: Uint8Array, compressed?: boolean): Uint8Array {
+    try {
+      const point = secp.Point.fromHex(Buffer.from(p).toString('hex'));
+      const hex = point.toHex(compressed !== false);
+      return Buffer.from(hex, 'hex');
+    } catch {
+      return p;
+    }
+  },
+  
+  isXOnlyPoint(p: Uint8Array): boolean {
+    if (p.length !== 32) return false;
+    try {
+      const hex = Buffer.from(p).toString('hex');
+      secp.Point.fromHex('02' + hex);
+      return true;
+    } catch {
+      try {
+        const hex = Buffer.from(p).toString('hex');
+        secp.Point.fromHex('03' + hex);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  },
+  
+  xOnlyPointAddTweak(p: Uint8Array, tweak: Uint8Array): { parity: 0 | 1; xOnlyPubkey: Uint8Array } | null {
+    try {
+      if (!secp.utils.isValidPrivateKey(tweak)) return null;
+      const hex = Buffer.from(p).toString('hex');
+      let point;
+      try {
+        point = secp.Point.fromHex('02' + hex);
+      } catch {
+        point = secp.Point.fromHex('03' + hex);
+      }
+      const tweakPoint = secp.Point.fromPrivateKey(tweak);
+      const result = point.add(tweakPoint);
+      if (result.equals(secp.Point.ZERO)) return null;
+      const resultHex = result.toHex(true);
+      const resultBytes = Buffer.from(resultHex, 'hex');
+      return {
+        parity: resultBytes[0] === 0x02 ? 0 : 1,
+        xOnlyPubkey: resultBytes.slice(1)
+      };
+    } catch {
+      return null;
+    }
+  },
+  
   sign(h: Uint8Array, d: Uint8Array): Uint8Array {
     return secp.signSync(h, d, { der: false });
+  },
+  
+  signSchnorr(h: Uint8Array, d: Uint8Array): Uint8Array {
+    return secp.schnorr.signSync(h, d);
   },
   
   verify(h: Uint8Array, Q: Uint8Array, signature: Uint8Array): boolean {
     try {
       return secp.verify(signature, h, Q);
+    } catch {
+      return false;
+    }
+  },
+  
+  verifySchnorr(h: Uint8Array, Q: Uint8Array, signature: Uint8Array): boolean {
+    try {
+      return secp.schnorr.verifySync(signature, h, Q);
     } catch {
       return false;
     }
