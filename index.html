@@ -75,10 +75,165 @@
       #root {
         min-height: 100vh;
       }
+      /* 调试面板 - 默认隐藏,双击顶部显示 */
+      #debug-panel {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.95);
+        color: #0f0;
+        padding: 8px;
+        font-size: 10px;
+        font-family: 'Courier New', monospace;
+        z-index: 999999;
+        max-height: 150px;
+        overflow-y: auto;
+        border-bottom: 2px solid #0f0;
+        display: none;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+      }
+      #debug-panel.show {
+        display: block;
+      }
+      #debug-panel .header {
+        color: #ff0;
+        font-weight: bold;
+        margin-bottom: 4px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #333;
+      }
+      #debug-panel .log {
+        margin: 2px 0;
+        word-break: break-all;
+        line-height: 1.4;
+        padding: 2px 0;
+      }
+      #debug-panel .error {
+        color: #f00;
+        font-weight: bold;
+        background: rgba(255,0,0,0.1);
+        padding: 2px 4px;
+      }
+      #debug-panel .success {
+        color: #0f0;
+      }
+      #debug-panel .warning {
+        color: #ff0;
+      }
+      #debug-panel .info {
+        color: #0ff;
+      }
     </style>
   </head>
   <body>
+    <!-- 调试面板 (双击顶部显示/隐藏) -->
+    <div id="debug-panel">
+      <div class="header">🔍 调试面板 (双击顶部切换显示)</div>
+    </div>
+    
     <div id="root"></div>
+    
+    <script>
+      // 调试系统 - 轻量级,不影响性能
+      const debugPanel = document.getElementById('debug-panel');
+      let logCount = 0;
+      let hasError = false;
+      
+      function debugLog(msg, type = 'log') {
+        logCount++;
+        const div = document.createElement('div');
+        div.className = `log ${type}`;
+        const time = new Date().toLocaleTimeString();
+        div.textContent = `[${time}] ${msg}`;
+        debugPanel.appendChild(div);
+        debugPanel.scrollTop = debugPanel.scrollHeight;
+        
+        // 有错误时自动显示面板
+        if (type === 'error') {
+          hasError = true;
+          debugPanel.classList.add('show');
+        }
+        
+        // 限制日志数量,避免内存泄漏
+        if (debugPanel.children.length > 50) {
+          debugPanel.removeChild(debugPanel.children[1]); // 保留 header
+        }
+      }
+      
+      debugLog('✅ HTML loaded', 'success');
+      debugLog(`📍 Location: ${window.location.href.substring(0, 60)}...`, 'info');
+      
+      // 监听全局错误
+      window.addEventListener('error', (e) => {
+        debugLog(`❌ Error: ${e.message}`, 'error');
+        debugLog(`📄 ${e.filename}:${e.lineno}:${e.colno}`, 'error');
+      });
+      
+      window.addEventListener('unhandledrejection', (e) => {
+        debugLog(`❌ Promise: ${e.reason}`, 'error');
+      });
+      
+      document.addEventListener('DOMContentLoaded', () => {
+        debugLog('✅ DOM Ready', 'success');
+      });
+      
+      window.addEventListener('load', () => {
+        debugLog('✅ Window Loaded', 'success');
+        
+        setTimeout(() => {
+          if (window.Capacitor) {
+            debugLog(`✅ Capacitor: ${window.Capacitor.getPlatform()}`, 'success');
+          } else {
+            debugLog('⚠️ Capacitor not detected', 'warning');
+          }
+          
+          if (typeof Buffer !== 'undefined') {
+            debugLog('✅ Buffer available', 'success');
+          } else {
+            debugLog('❌ Buffer NOT available', 'error');
+          }
+          
+          setTimeout(() => {
+            const root = document.getElementById('root');
+            if (root && root.children.length > 0) {
+              debugLog('✅ React rendered successfully', 'success');
+              // 成功渲染后3秒自动隐藏面板
+              if (!hasError) {
+                setTimeout(() => {
+                  debugPanel.classList.remove('show');
+                }, 3000);
+              }
+            } else {
+              debugLog('❌ React NOT rendered - WHITE SCREEN!', 'error');
+              debugLog('⚠️ Check console for errors', 'warning');
+            }
+          }, 2000);
+        }, 1000);
+      });
+      
+      // 双击顶部区域显示/隐藏调试面板
+      let lastTap = 0;
+      document.addEventListener('touchstart', (e) => {
+        if (e.touches[0].clientY < 50) {
+          const currentTime = new Date().getTime();
+          const tapLength = currentTime - lastTap;
+          if (tapLength < 500 && tapLength > 0) {
+            debugPanel.classList.toggle('show');
+            debugLog('👆 面板切换', 'info');
+          }
+          lastTap = currentTime;
+        }
+      });
+      
+      // PC端双击支持
+      document.addEventListener('dblclick', (e) => {
+        if (e.clientY < 50) {
+          debugPanel.classList.toggle('show');
+          debugLog('👆 面板切换', 'info');
+        }
+      });
+    </script>
     
     <script type="module" src="/src/main.tsx"></script>
   </body>
