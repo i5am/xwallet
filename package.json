@@ -20,6 +20,7 @@
     "eas:build:production": "eas build --platform ios --profile production"
   },
   "dependencies": {
+    "@bitcoinerlab/secp256k1": "^1.2.0",
     "@capacitor/android": "^7.4.3",
     "@capacitor/camera": "^7.0.2",
     "@capacitor/cli": "^7.4.3",
