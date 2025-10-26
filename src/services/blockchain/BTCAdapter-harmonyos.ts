@@ -46,6 +46,18 @@ const ecc = {
     }
   },
   
+  pointAdd(p: Uint8Array, q: Uint8Array, compressed?: boolean): Uint8Array | null {
+    try {
+      const point1 = secp.Point.fromHex(Buffer.from(p).toString('hex'));
+      const point2 = secp.Point.fromHex(Buffer.from(q).toString('hex'));
+      const result = point1.add(point2);
+      const hex = result.toHex(compressed !== false);
+      return Buffer.from(hex, 'hex');
+    } catch {
+      return null;
+    }
+  },
+  
   pointAddScalar(p: Uint8Array, tweak: Uint8Array, compressed?: boolean): Uint8Array | null {
     try {
       const point = secp.Point.fromHex(Buffer.from(p).toString('hex'));
@@ -63,6 +75,8 @@ const ecc = {
       const dNum = BigInt('0x' + Buffer.from(d).toString('hex'));
       const tweakNum = BigInt('0x' + Buffer.from(tweak).toString('hex'));
       const sum = (dNum + tweakNum) % secp.CURVE.n;
+      // 如果结果为0，返回null（无效私钥）
+      if (sum === 0n) return null;
       return Buffer.from(sum.toString(16).padStart(64, '0'), 'hex');
     } catch {
       return null;
@@ -152,7 +166,11 @@ const ecc = {
   },
   
   sign(h: Uint8Array, d: Uint8Array): Uint8Array {
-    return secp.signSync(h, d, { der: false });
+    // @noble/secp256k1 的 signSync 返回 Signature 对象
+    // 需要转换为 64 字节紧凑格式 (r + s)
+    const sig = secp.signSync(h, d, { der: false });
+    // 确保返回 Uint8Array 格式
+    return sig instanceof Uint8Array ? sig : Uint8Array.from(sig);
   },
   
   signSchnorr(h: Uint8Array, d: Uint8Array): Uint8Array {
@@ -200,10 +218,31 @@ function testEccMethods() {
     if (pubKey) {
       console.log('✓ isPoint:', ecc.isPoint(pubKey));
       
+      // 测试 pointAdd
+      const pubKey2 = ecc.pointFromScalar(Buffer.from('0000000000000000000000000000000000000000000000000000000000000002', 'hex'), true);
+      if (pubKey2) {
+        const added = ecc.pointAdd(pubKey, pubKey2, true);
+        console.log('✓ pointAdd:', added ? 'OK' : 'FAILED');
+      }
+      
       // 测试 pointMultiply
       const tweak = Buffer.from('0000000000000000000000000000000000000000000000000000000000000002', 'hex');
       const multiplied = ecc.pointMultiply(pubKey, tweak, true);
       console.log('✓ pointMultiply:', multiplied ? 'OK' : 'FAILED');
+      
+      // 测试 sign 和 verify
+      const hash = Buffer.from('0000000000000000000000000000000000000000000000000000000000000003', 'hex');
+      const signature = ecc.sign(hash, testPrivKey);
+      console.log('✓ sign:', signature ? `OK (${signature.length} bytes)` : 'FAILED');
+      
+      if (signature) {
+        const verified = ecc.verify(hash, pubKey, signature);
+        console.log('✓ verify:', verified);
+      }
+      
+      // 测试 privateAdd
+      const added = ecc.privateAdd(testPrivKey, tweak);
+      console.log('✓ privateAdd:', added ? 'OK' : 'FAILED');
     }
   } catch (err) {
     console.error('❌ ECC 方法测试失败:', err);
