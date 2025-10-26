@@ -2,7 +2,7 @@
  * 应用配置
  */
 export const APP_CONFIG = {
-  name: 'Tether WDK Wallet',
+  name: 'XWallet',
   version: '1.0.0',
   
   // 默认设置

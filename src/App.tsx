@@ -10,7 +10,9 @@ import { AIServicePayment } from './types/flightspark';
 import { getNetworkConfig } from './config';
 import { formatAddress } from './utils';
 import { ProtocolUtils } from './utils/protocol';
-import { Wallet as WalletIcon, Plus, ArrowUpRight, ArrowDownLeft, Settings, Zap, X, Camera, QrCode as QrCodeIcon } from 'lucide-react';
+import { WalletStorage } from './services/storage/WalletStorage';
+import { PasswordService } from './services/storage/PasswordService';
+import { Wallet as WalletIcon, Plus, ArrowUpRight, ArrowDownLeft, Settings, Zap, X, Camera, QrCode as QrCodeIcon, Lock, Eye, EyeOff } from 'lucide-react';
 
 function App() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -43,6 +45,17 @@ function App() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [signatureInProgress, setSignatureInProgress] = useState(false);
   
+  // 密码相关状态
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [showSetPasswordDialog, setShowSetPasswordDialog] = useState(false);
+  const [password, setPassword] = useState<string>('');
+  const [confirmPassword, setConfirmPassword] = useState<string>('');
+  const [passwordAction, setPasswordAction] = useState<'view' | 'delete' | null>(null);
+  const [selectedWalletForAction, setSelectedWalletForAction] = useState<Wallet | null>(null);
+  const [showWalletDetails, setShowWalletDetails] = useState(false);
+  const [showPrivateKey, setShowPrivateKey] = useState(false);
+  const [showMnemonic, setShowMnemonic] = useState(false);
+  
   // 发送交易相关状态
   const [sendToAddress, setSendToAddress] = useState<string>('');
   const [sendAmount, setSendAmount] = useState<string>('');
@@ -50,10 +63,28 @@ function App() {
   const [sendMemo, setSendMemo] = useState<string>('');
   const [transactionQrCode, setTransactionQrCode] = useState<string>('');
   
+  // 输入扫描相关状态
+  const [showInputScanDialog, setShowInputScanDialog] = useState(false);
+  const [scanInputCallback, setScanInputCallback] = useState<((value: string) => void) | null>(null);
+  const [scanInputTitle, setScanInputTitle] = useState<string>('扫描二维码');
+  
   // 摄像头相关 refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scanIntervalRef = useRef<number | null>(null);
+  const inputVideoRef = useRef<HTMLVideoElement>(null);
+  const inputCanvasRef = useRef<HTMLCanvasElement>(null);
+  const inputScanIntervalRef = useRef<number | null>(null);
+
+  // 组件加载时从本地存储加载钱包
+  useEffect(() => {
+    const loadedWallets = WalletStorage.loadWallets();
+    if (loadedWallets.length > 0) {
+      setWallets(loadedWallets);
+      setSelectedWallet(loadedWallets[0]);
+      console.log(`✅ 已加载 ${loadedWallets.length} 个钱包`);
+    }
+  }, []);
 
   // 生成接收地址二维码 (支持简单格式和协议格式)
   useEffect(() => {
@@ -144,9 +175,14 @@ function App() {
         isOnline: type !== WalletType.COLD,
       };
 
-      setWallets([...wallets, newWallet]);
+      const updatedWallets = [...wallets, newWallet];
+      setWallets(updatedWallets);
+      
+      // 保存到本地存储
+      WalletStorage.saveWallets(updatedWallets);
+      
       setShowCreateWallet(false);
-      alert(`钱包创建成功！\n\n地址: ${address}\n\n助记词（请妥善保管）:\n${mnemonic}`);
+      alert(`钱包创建成功！\n\n地址: ${address}\n\n⚠️ 请务必备份助记词（已保存到本地）:\n${mnemonic}`);
     } catch (error) {
       alert(`创建钱包失败: ${(error as Error).message}`);
     }
@@ -226,7 +262,12 @@ function App() {
         isOnline: importWalletType === WalletType.HOT,
       };
 
-      setWallets([...wallets, newWallet]);
+      const updatedWallets = [...wallets, newWallet];
+      setWallets(updatedWallets);
+      
+      // 保存到本地存储
+      WalletStorage.saveWallets(updatedWallets);
+      
       setShowImportDialog(false);
       setImportMnemonic('');
       setImportPrivateKey('');
@@ -234,6 +275,91 @@ function App() {
     } catch (error) {
       alert(`❌ 导入钱包失败: ${(error as Error).message}`);
     }
+  };
+
+  // 设置密码
+  const handleSetPassword = async () => {
+    if (password !== confirmPassword) {
+      alert('两次输入的密码不一致');
+      return;
+    }
+    
+    if (password.length < 4) {
+      alert('密码长度至少为4位');
+      return;
+    }
+    
+    try {
+      await PasswordService.setPassword(password);
+      setShowSetPasswordDialog(false);
+      setPassword('');
+      setConfirmPassword('');
+      alert('✅ 密码设置成功！');
+    } catch (error) {
+      alert(`设置密码失败: ${(error as Error).message}`);
+    }
+  };
+
+  // 验证密码并查看钱包详情
+  const handleViewWalletDetails = async (wallet: Wallet) => {
+    if (!PasswordService.hasPassword()) {
+      // 如果没有设置密码，提示先设置
+      if (confirm('您还未设置密码，是否现在设置？\n\n设置密码后可以保护您的私钥和助记词')) {
+        setShowSetPasswordDialog(true);
+      }
+      return;
+    }
+    
+    setSelectedWalletForAction(wallet);
+    setPasswordAction('view');
+    setShowPasswordDialog(true);
+  };
+
+  // 密码验证
+  const handlePasswordVerify = async () => {
+    if (!password) {
+      alert('请输入密码');
+      return;
+    }
+    
+    try {
+      const isValid = await PasswordService.verifyPassword(password);
+      if (!isValid) {
+        alert('❌ 密码错误！');
+        return;
+      }
+      
+      setShowPasswordDialog(false);
+      setPassword('');
+      
+      if (passwordAction === 'view' && selectedWalletForAction) {
+        // 显示钱包详情
+        setSelectedWallet(selectedWalletForAction);
+        setShowWalletDetails(true);
+      } else if (passwordAction === 'delete' && selectedWalletForAction) {
+        // 删除钱包
+        handleDeleteWallet(selectedWalletForAction.id);
+      }
+    } catch (error) {
+      alert(`验证失败: ${(error as Error).message}`);
+    }
+  };
+
+  // 删除钱包
+  const handleDeleteWallet = (walletId: string) => {
+    if (!confirm('确定要删除这个钱包吗？\n\n⚠️ 删除后无法恢复，请确保已备份助记词！')) {
+      return;
+    }
+    
+    const updatedWallets = wallets.filter(w => w.id !== walletId);
+    setWallets(updatedWallets);
+    WalletStorage.saveWallets(updatedWallets);
+    
+    if (selectedWallet?.id === walletId) {
+      setSelectedWallet(updatedWallets[0] || null);
+    }
+    
+    alert('✅ 钱包已删除');
   };
 
   // 签名消息
@@ -424,6 +550,101 @@ function App() {
     }
     
     setIsScanning(false);
+  };
+
+  // 启动输入扫描
+  const startInputScan = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+      
+      if (inputVideoRef.current) {
+        inputVideoRef.current.srcObject = stream;
+        await inputVideoRef.current.play();
+        
+        // 开始扫描循环
+        inputScanIntervalRef.current = window.setInterval(scanInputFrame, 100);
+      }
+    } catch (error) {
+      console.error('无法访问摄像头:', error);
+      alert('无法访问摄像头，请检查权限设置');
+    }
+  };
+
+  // 停止输入扫描
+  const stopInputScan = () => {
+    if (inputScanIntervalRef.current) {
+      clearInterval(inputScanIntervalRef.current);
+      inputScanIntervalRef.current = null;
+    }
+    
+    if (inputVideoRef.current && inputVideoRef.current.srcObject) {
+      const stream = inputVideoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      inputVideoRef.current.srcObject = null;
+    }
+  };
+
+  // 扫描输入框二维码帧
+  const scanInputFrame = () => {
+    if (!inputVideoRef.current || !inputCanvasRef.current) return;
+    
+    const video = inputVideoRef.current;
+    const canvas = inputCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    
+    if (code && scanInputCallback) {
+      stopInputScan();
+      
+      // 尝试解析数据
+      let value = code.data;
+      try {
+        const parsed = ProtocolUtils.parseMessage(code.data);
+        if (parsed && parsed.data) {
+          // 根据不同类型提取数据
+          if (parsed.data.address) {
+            value = parsed.data.address;
+          } else if (parsed.data.privateKey) {
+            value = parsed.data.privateKey;
+          } else if (parsed.data.mnemonic) {
+            value = parsed.data.mnemonic;
+          } else if (typeof parsed.data === 'string') {
+            value = parsed.data;
+          }
+        }
+      } catch (e) {
+        // 使用原始数据
+      }
+      
+      scanInputCallback(value);
+      setShowInputScanDialog(false);
+      setScanInputCallback(null);
+    }
+  };
+
+  // 打开输入扫描对话框
+  const openInputScan = (title: string, callback: (value: string) => void) => {
+    setScanInputTitle(title);
+    setScanInputCallback(() => callback);
+    setShowInputScanDialog(true);
+    setTimeout(() => startInputScan(), 300);
+  };
+
+  // 关闭输入扫描对话框
+  const closeInputScan = () => {
+    stopInputScan();
+    setShowInputScanDialog(false);
+    setScanInputCallback(null);
   };
 
   // 扫描视频帧
@@ -816,29 +1037,30 @@ function App() {
   useEffect(() => {
     return () => {
       stopScan();
+      stopInputScan();
     };
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="container mx-auto px-4 py-8">
+    <>
+      <div className="min-h-screen px-4 py-6">
         {/* Header */}
-        <header className="mb-8">
+        <header className="mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <WalletIcon className="w-10 h-10 text-primary-600" />
+              <WalletIcon className="w-10 h-10 text-white" />
               <div>
-                <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
-                  Tether WDK Wallet
+                <h1 className="text-2xl font-bold text-white whitespace-nowrap">
+                  XWallet
                 </h1>
-                <p className="text-gray-600 dark:text-gray-400">
-                  多链加密货币钱包 - BTC (Taproot) & ETH
+                <p className="text-white/80 text-sm">
+                  多链加密货币钱包
                 </p>
               </div>
             </div>
             <button 
               onClick={() => setShowSettingsDialog(true)}
-              className="btn-primary flex items-center gap-2"
+              className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2"
             >
               <Settings className="w-5 h-5" />
               设置
@@ -920,15 +1142,17 @@ function App() {
                   wallets.map((wallet) => (
                     <div
                       key={wallet.id}
-                      onClick={() => setSelectedWallet(wallet)}
-                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                      className={`p-4 rounded-lg border-2 transition-all ${
                         selectedWallet?.id === wallet.id
                           ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                           : 'border-gray-200 dark:border-gray-700 hover:border-primary-300'
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <div>
+                        <div 
+                          onClick={() => setSelectedWallet(wallet)}
+                          className="flex-1 cursor-pointer"
+                        >
                           <div className="font-medium text-gray-800 dark:text-white">
                             {wallet.name}
                           </div>
@@ -936,10 +1160,22 @@ function App() {
                             {formatAddress(wallet.address)}
                           </div>
                         </div>
-                        <div className="text-2xl">
-                          {wallet.type === WalletType.HOT && '🔥'}
-                          {wallet.type === WalletType.COLD && '❄️'}
-                          {wallet.type === WalletType.WATCH_ONLY && '👁️'}
+                        <div className="flex items-center gap-2">
+                          <div className="text-2xl">
+                            {wallet.type === WalletType.HOT && '🔥'}
+                            {wallet.type === WalletType.COLD && '❄️'}
+                            {wallet.type === WalletType.WATCH_ONLY && '👁️'}
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewWalletDetails(wallet);
+                            }}
+                            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                            title="查看详情"
+                          >
+                            <Lock className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1115,9 +1351,9 @@ function App() {
         </div>
 
         {/* Footer */}
-        <footer className="mt-12 text-center text-gray-600 dark:text-gray-400">
+        <footer className="mt-12 pb-8 text-center text-white/60">
           <p className="text-sm">
-            Tether WDK Wallet v1.0.0 - 支持 BTC (Taproot) 和 ETH (含 ERC20)
+            XWallet v1.0.0
           </p>
           <p className="text-xs mt-1">
             ⚠️ 请务必备份助记词，丢失后将无法恢复钱包
@@ -1136,13 +1372,22 @@ function App() {
                 <div className="space-y-4">
                   <div>
                     <label className="text-sm text-gray-600 dark:text-gray-400">接收地址</label>
-                    <input 
-                      type="text" 
-                      className="input-field" 
-                      placeholder="输入接收地址"
-                      value={sendToAddress}
-                      onChange={(e) => setSendToAddress(e.target.value)}
-                    />
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        className="input-field flex-1" 
+                        placeholder="输入接收地址"
+                        value={sendToAddress}
+                        onChange={(e) => setSendToAddress(e.target.value)}
+                      />
+                      <button
+                        onClick={() => openInputScan('扫描接收地址', (value) => setSendToAddress(value))}
+                        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors flex items-center gap-2"
+                        title="扫描二维码"
+                      >
+                        <Camera className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="text-sm text-gray-600 dark:text-gray-400">金额</label>
@@ -1571,24 +1816,42 @@ function App() {
                 {importType === 'mnemonic' ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">助记词</label>
-                    <textarea
-                      value={importMnemonic}
-                      onChange={(e) => setImportMnemonic(e.target.value)}
-                      className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded focus:ring-2 focus:ring-blue-500 dark:text-white"
-                      rows={3}
-                      placeholder="输入12或24个单词的助记词，用空格分隔"
-                    />
+                    <div className="flex gap-2">
+                      <textarea
+                        value={importMnemonic}
+                        onChange={(e) => setImportMnemonic(e.target.value)}
+                        className="flex-1 p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded focus:ring-2 focus:ring-blue-500 dark:text-white"
+                        rows={3}
+                        placeholder="输入12或24个单词的助记词，用空格分隔"
+                      />
+                      <button
+                        onClick={() => openInputScan('扫描助记词', (value) => setImportMnemonic(value))}
+                        className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors flex items-center justify-center"
+                        title="扫描二维码"
+                      >
+                        <Camera className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">私钥</label>
-                    <textarea
-                      value={importPrivateKey}
-                      onChange={(e) => setImportPrivateKey(e.target.value)}
-                      className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded focus:ring-2 focus:ring-blue-500 dark:text-white"
-                      rows={2}
-                      placeholder="输入私钥（十六进制格式）"
-                    />
+                    <div className="flex gap-2">
+                      <textarea
+                        value={importPrivateKey}
+                        onChange={(e) => setImportPrivateKey(e.target.value)}
+                        className="flex-1 p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded focus:ring-2 focus:ring-blue-500 dark:text-white"
+                        rows={2}
+                        placeholder="输入私钥（十六进制格式）"
+                      />
+                      <button
+                        onClick={() => openInputScan('扫描私钥', (value) => setImportPrivateKey(value))}
+                        className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors flex items-center justify-center"
+                        title="扫描二维码"
+                      >
+                        <Camera className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -1670,6 +1933,46 @@ function App() {
               </div>
 
               <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">密码设置</label>
+                  <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
+                    {PasswordService.hasPassword() ? (
+                      <div className="space-y-2">
+                        <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-2">
+                          <Lock className="w-4 h-4" />
+                          密码已设置
+                        </p>
+                        <button
+                          onClick={() => {
+                            setShowSettingsDialog(false);
+                            setShowSetPasswordDialog(true);
+                            setPassword('');
+                            setConfirmPassword('');
+                          }}
+                          className="w-full text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded transition-colors"
+                        >
+                          修改密码
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-sm text-yellow-600 dark:text-yellow-400">尚未设置密码</p>
+                        <button
+                          onClick={() => {
+                            setShowSettingsDialog(false);
+                            setShowSetPasswordDialog(true);
+                            setPassword('');
+                            setConfirmPassword('');
+                          }}
+                          className="w-full text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded transition-colors"
+                        >
+                          设置密码
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">网络设置</label>
                   <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
@@ -2109,8 +2412,437 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* 设置密码对话框 */}
+        {showSetPasswordDialog && (
+          <div className="dialog-overlay">
+            <div className="dialog-content card">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+                  <Lock className="w-6 h-6" />
+                  {PasswordService.hasPassword() ? '修改密码' : '设置密码'}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowSetPasswordDialog(false);
+                    setPassword('');
+                    setConfirmPassword('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-sm">
+                  <p className="text-blue-800 dark:text-blue-200">
+                    🔐 设置密码后，查看私钥和助记词时需要输入密码验证
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {PasswordService.hasPassword() ? '新密码' : '密码'}
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="input-field"
+                    placeholder="输入密码（至少6位）"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    确认密码
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="input-field"
+                    placeholder="再次输入密码"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setShowSetPasswordDialog(false);
+                      setPassword('');
+                      setConfirmPassword('');
+                    }}
+                    className="btn-secondary flex-1"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleSetPassword}
+                    className="btn-primary flex-1"
+                  >
+                    确认
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 密码验证对话框 */}
+        {showPasswordDialog && (
+          <div className="dialog-overlay">
+            <div className="dialog-content card">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+                  <Lock className="w-6 h-6" />
+                  输入密码
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowPasswordDialog(false);
+                    setPassword('');
+                    setPasswordAction(null);
+                    setSelectedWalletForAction(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg text-sm">
+                  <p className="text-yellow-800 dark:text-yellow-200">
+                    🔒 请输入密码以{passwordAction === 'view' ? '查看钱包详情' : '继续操作'}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    密码
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handlePasswordVerify();
+                      }
+                    }}
+                    className="input-field"
+                    placeholder="输入密码"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setShowPasswordDialog(false);
+                      setPassword('');
+                      setPasswordAction(null);
+                      setSelectedWalletForAction(null);
+                    }}
+                    className="btn-secondary flex-1"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handlePasswordVerify}
+                    className="btn-primary flex-1"
+                  >
+                    确认
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 钱包详情对话框 */}
+        {showWalletDetails && selectedWalletForAction && (
+          <div className="dialog-overlay">
+            <div className="dialog-content card max-h-[80vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
+                  钱包详情
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowWalletDetails(false);
+                    setSelectedWalletForAction(null);
+                    setShowPrivateKey(false);
+                    setShowMnemonic(false);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                        钱包名称
+                      </label>
+                      <div className="mt-1 text-gray-800 dark:text-white font-medium">
+                        {selectedWalletForAction.name}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                        钱包类型
+                      </label>
+                      <div className="mt-1 text-gray-800 dark:text-white">
+                        {selectedWalletForAction.type === WalletType.HOT && '🔥 热钱包'}
+                        {selectedWalletForAction.type === WalletType.COLD && '❄️ 冷钱包'}
+                        {selectedWalletForAction.type === WalletType.WATCH_ONLY && '👁️ 观察钱包'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                        区块链
+                      </label>
+                      <div className="mt-1 text-gray-800 dark:text-white">
+                        {selectedWalletForAction.chain} ({selectedWalletForAction.network})
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                        钱包地址
+                      </label>
+                      <div className="mt-1 p-3 bg-white dark:bg-gray-700 rounded font-mono text-sm break-all">
+                        {selectedWalletForAction.address}
+                      </div>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedWalletForAction.address);
+                          alert('地址已复制');
+                        }}
+                        className="mt-2 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                      >
+                        📋 复制地址
+                      </button>
+                    </div>
+
+                    {selectedWalletForAction.publicKey && (
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                          公钥
+                        </label>
+                        <div className="mt-1 p-3 bg-white dark:bg-gray-700 rounded font-mono text-xs break-all">
+                          {selectedWalletForAction.publicKey}
+                        </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedWalletForAction.publicKey!);
+                            alert('公钥已复制');
+                          }}
+                          className="mt-2 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                        >
+                          📋 复制公钥
+                        </button>
+                      </div>
+                    )}
+
+                    {selectedWalletForAction.type !== WalletType.WATCH_ONLY && (
+                      <>
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                              私钥
+                            </label>
+                            <button
+                              onClick={() => setShowPrivateKey(!showPrivateKey)}
+                              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1"
+                            >
+                              {showPrivateKey ? (
+                                <>
+                                  <EyeOff className="w-4 h-4" />
+                                  隐藏
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="w-4 h-4" />
+                                  显示
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          {showPrivateKey ? (
+                            <>
+                              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded font-mono text-xs break-all">
+                                {selectedWalletForAction.privateKey}
+                              </div>
+                              <button
+                                onClick={() => {
+                                  if (selectedWalletForAction.privateKey) {
+                                    navigator.clipboard.writeText(selectedWalletForAction.privateKey);
+                                    alert('私钥已复制');
+                                  }
+                                }}
+                                className="mt-2 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                              >
+                                📋 复制私钥
+                              </button>
+                            </>
+                          ) : (
+                            <div className="p-3 bg-gray-200 dark:bg-gray-600 rounded text-center text-gray-500 dark:text-gray-400">
+                              ••••••••••••••••••••
+                            </div>
+                          )}
+                        </div>
+
+                        {selectedWalletForAction.mnemonic && (
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                                助记词
+                              </label>
+                              <button
+                                onClick={() => setShowMnemonic(!showMnemonic)}
+                                className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1"
+                              >
+                                {showMnemonic ? (
+                                  <>
+                                    <EyeOff className="w-4 h-4" />
+                                    隐藏
+                                  </>
+                                ) : (
+                                  <>
+                                    <Eye className="w-4 h-4" />
+                                    显示
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                            {showMnemonic ? (
+                              <>
+                                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded text-sm break-all">
+                                  {selectedWalletForAction.mnemonic}
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(selectedWalletForAction.mnemonic!);
+                                    alert('助记词已复制');
+                                  }}
+                                  className="mt-2 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                                >
+                                  📋 复制助记词
+                                </button>
+                              </>
+                            ) : (
+                              <div className="p-3 bg-gray-200 dark:bg-gray-600 rounded text-center text-gray-500 dark:text-gray-400">
+                                ••• ••• ••• ••• ••• ••• ••• ••• ••• ••• ••• •••
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                        创建时间
+                      </label>
+                      <div className="mt-1 text-gray-800 dark:text-white text-sm">
+                        {new Date(selectedWalletForAction.createdAt).toLocaleString('zh-CN')}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg p-3">
+                  <p className="text-sm text-red-800 dark:text-red-200">
+                    ⚠️ 请妥善保管私钥和助记词，切勿泄露给他人！
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (confirm(`确定要删除钱包"${selectedWalletForAction.name}"吗？\n\n⚠️ 删除后无法恢复，请确保已备份私钥或助记词！`)) {
+                        handleDeleteWallet(selectedWalletForAction.id);
+                      }
+                    }}
+                    className="btn-secondary flex-1 bg-red-500 hover:bg-red-600 text-white"
+                  >
+                    删除钱包
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowWalletDetails(false);
+                      setSelectedWalletForAction(null);
+                      setShowPrivateKey(false);
+                      setShowMnemonic(false);
+                    }}
+                    className="btn-primary flex-1"
+                  >
+                    关闭
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 输入扫描对话框 */}
+        {showInputScanDialog && (
+          <div className="dialog-overlay" style={{ zIndex: 70 }}>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                  <Camera className="w-6 h-6" />
+                  {scanInputTitle}
+                </h2>
+                <button
+                  onClick={closeInputScan}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="relative bg-black rounded-lg overflow-hidden" style={{ height: '300px' }}>
+                  <video 
+                    ref={inputVideoRef}
+                    className="w-full h-full object-cover"
+                    playsInline
+                  />
+                  <canvas 
+                    ref={inputCanvasRef}
+                    className="hidden"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-48 h-48 border-4 border-blue-500 rounded-lg animate-pulse"></div>
+                  </div>
+                </div>
+
+                <div className="text-center text-gray-600 dark:text-gray-400 text-sm">
+                  将二维码对准扫描框
+                </div>
+
+                <button
+                  onClick={closeInputScan}
+                  className="w-full bg-gray-500 hover:bg-gray-600 text-white p-3 rounded transition-colors"
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    </>
   );
 }
 

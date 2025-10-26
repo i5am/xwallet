@@ -19,18 +19,19 @@
 
 body {
   margin: 0;
+  padding: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #f5f5f5;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   overflow-x: hidden;
 }
 
 #root {
   width: 100%;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 1rem;
+  margin: 0;
+  padding: 0;
   min-height: 100vh;
+  background: transparent;
 }
 
 /* 移动端优化 */
@@ -65,7 +66,7 @@ body {
   }
   
   .card {
-    @apply bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 mb-4;
+    @apply bg-white/90 backdrop-blur-sm dark:bg-gray-800/90 rounded-xl shadow-lg p-4 mb-4;
   }
 }
 

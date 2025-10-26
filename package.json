@@ -1,5 +1,5 @@
 {
-  "name": "tether-wdk-wallet",
+  "name": "xwallet",
   "version": "1.0.0",
   "type": "module",
   "description": "Tether WDK Multi-chain Wallet (Hot/Cold/Watch-only)",
