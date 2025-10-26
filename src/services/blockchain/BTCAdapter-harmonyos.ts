@@ -3,25 +3,96 @@ import { BIP32Factory, BIP32API } from 'bip32';
 import * as bip39 from 'bip39';
 import { DERIVATION_PATHS } from '@/utils';
 import { NetworkType } from '@/types';
-import * as ecc from 'tiny-secp256k1';
+import * as secp from '@noble/secp256k1';
+// @ts-ignore
+import { sha256 } from '@noble/hashes/sha2.js';
+// @ts-ignore
+import { hmac } from '@noble/hashes/hmac.js';
 
-// 初始化 ECC 库
-console.log('🔧 使用 tiny-secp256k1 初始化 ECC 库...');
+// 设置 @noble/secp256k1 所需的 hmac 和 sha256 函数
+secp.utils.hmacSha256Sync = (key: Uint8Array, ...messages: Uint8Array[]) => {
+  const h = hmac.create(sha256, key);
+  messages.forEach(msg => h.update(msg));
+  return h.digest();
+};
+
+// 创建 ECC 接口适配器
+const ecc = {
+  isPoint(p: Uint8Array): boolean {
+    try {
+      secp.Point.fromHex(Buffer.from(p).toString('hex'));
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  
+  isPrivate(d: Uint8Array): boolean {
+    return secp.utils.isValidPrivateKey(d);
+  },
+  
+  pointFromScalar(d: Uint8Array, compressed?: boolean): Uint8Array | null {
+    try {
+      const point = secp.getPublicKey(d, compressed !== false);
+      return Uint8Array.from(point);
+    } catch {
+      return null;
+    }
+  },
+  
+  pointAddScalar(p: Uint8Array, tweak: Uint8Array, compressed?: boolean): Uint8Array | null {
+    try {
+      const point = secp.Point.fromHex(Buffer.from(p).toString('hex'));
+      const tweakPoint = secp.Point.fromPrivateKey(tweak);
+      const result = point.add(tweakPoint);
+      const hex = result.toHex(compressed !== false);
+      return Buffer.from(hex, 'hex');
+    } catch {
+      return null;
+    }
+  },
+  
+  privateAdd(d: Uint8Array, tweak: Uint8Array): Uint8Array | null {
+    try {
+      const dNum = BigInt('0x' + Buffer.from(d).toString('hex'));
+      const tweakNum = BigInt('0x' + Buffer.from(tweak).toString('hex'));
+      const sum = (dNum + tweakNum) % secp.CURVE.n;
+      return Buffer.from(sum.toString(16).padStart(64, '0'), 'hex');
+    } catch {
+      return null;
+    }
+  },
+  
+  sign(h: Uint8Array, d: Uint8Array): Uint8Array {
+    return secp.signSync(h, d, { der: false });
+  },
+  
+  verify(h: Uint8Array, Q: Uint8Array, signature: Uint8Array): boolean {
+    try {
+      return secp.verify(signature, h, Q);
+    } catch {
+      return false;
+    }
+  },
+};
+
+// 初始化 bitcoinjs-lib
+console.log('🔧 使用 @noble/secp256k1 初始化 ECC 库...');
 try {
-  bitcoin.initEccLib(ecc);
+  bitcoin.initEccLib(ecc as any);
   console.log('✅ bitcoinjs-lib ECC 初始化成功!');
 } catch (error) {
   console.error('❌ bitcoinjs-lib ECC 初始化失败:', error);
 }
 
-// 创建延迟初始化的 BIP32 工厂
+// 创建 BIP32 工厂
 let _bip32Instance: BIP32API | null = null;
 
 function getBip32(): BIP32API {
   if (!_bip32Instance) {
     try {
       console.log('🔧 初始化 BIP32 工厂...');
-      _bip32Instance = BIP32Factory(ecc);
+      _bip32Instance = BIP32Factory(ecc as any);
       console.log('✅ BIP32 工厂创建成功!');
     } catch (err) {
       console.error('❌ BIP32 初始化失败:', err);
