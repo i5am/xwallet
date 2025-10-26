@@ -5,19 +5,31 @@ import { DERIVATION_PATHS } from '@/utils';
 import { NetworkType } from '@/types';
 import * as ecc from '@bitcoinerlab/secp256k1';
 
-// 初始化 bitcoinjs-lib
-console.log('🔧 使用 @bitcoinerlab/secp256k1 初始化 ECC 库...');
-try {
-  bitcoin.initEccLib(ecc);
-  console.log('✅ bitcoinjs-lib ECC 初始化成功!');
-} catch (error) {
-  console.error('❌ bitcoinjs-lib ECC 初始化失败:', error);
+// ECC 库初始化状态
+let _eccInitialized = false;
+
+// 确保 ECC 库已初始化
+function ensureEccInitialized(): void {
+  if (_eccInitialized) return;
+  
+  console.log('🔧 使用 @bitcoinerlab/secp256k1 初始化 ECC 库...');
+  try {
+    bitcoin.initEccLib(ecc);
+    _eccInitialized = true;
+    console.log('✅ bitcoinjs-lib ECC 初始化成功!');
+  } catch (error) {
+    console.error('❌ bitcoinjs-lib ECC 初始化失败:', error);
+    throw new Error('ECC 库初始化失败: ' + (error as Error).message);
+  }
 }
 
 // 创建 BIP32 工厂
 let _bip32Instance: BIP32API | null = null;
 
 function getBip32(): BIP32API {
+  // 确保 ECC 已初始化
+  ensureEccInitialized();
+  
   if (!_bip32Instance) {
     try {
       console.log('🔧 初始化 BIP32 工厂...');
@@ -58,6 +70,9 @@ export class BTCAdapter {
     path: string;
   } {
     try {
+      // 确保 ECC 库已初始化
+      ensureEccInitialized();
+      
       const seed = bip39.mnemonicToSeedSync(mnemonic);
       const root = getBip32().fromSeed(seed, this.network);
       const path = DERIVATION_PATHS.BTC_TAPROOT.replace('/0', `/${index}`);
@@ -93,6 +108,9 @@ export class BTCAdapter {
    */
   addressFromPrivateKey(privateKeyHex: string): string {
     try {
+      // 确保 ECC 库已初始化
+      ensureEccInitialized();
+      
       const privateKey = Buffer.from(privateKeyHex, 'hex');
       const publicKey = ecc.pointFromScalar(privateKey, true);
       
