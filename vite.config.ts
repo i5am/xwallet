@@ -1,11 +1,15 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import wasm from 'vite-plugin-wasm';
+import topLevelAwait from 'vite-plugin-top-level-await';
 
 // https://vitejs.dev/config/
 export default defineConfig({
   base: './',  // 使用相对路径,兼容 iOS capacitor:// scheme
   plugins: [
+    wasm(),
+    topLevelAwait(),
     react(),
   ],
   resolve: {
@@ -38,7 +42,7 @@ export default defineConfig({
       },
       inject: [path.resolve(__dirname, './src/buffer-polyfill.js')],
     },
-    include: ['buffer', 'events', 'util', 'stream-browserify', 'crypto-browserify', 'bitcoinjs-lib', 'bip32', 'bip39', 'tiny-secp256k1', 'ecpair'],
+    include: ['buffer', 'events', 'util', 'stream-browserify', 'crypto-browserify', 'bitcoinjs-lib', 'bip32', 'bip39', 'tiny-secp256k1', 'ecpair', '@noble/secp256k1', '@noble/hashes/sha2.js', '@noble/hashes/hmac.js'],
     exclude: [],
   },
   server: {
