@@ -81,9 +81,15 @@ const ecc = {
       const point = secp.Point.fromHex(Buffer.from(p).toString('hex'));
       const tweakNum = BigInt('0x' + Buffer.from(tweak).toString('hex'));
       const result = point.multiply(tweakNum);
-      if (result.equals(secp.Point.ZERO)) return null;
-      const hex = result.toHex(compressed !== false);
-      return Buffer.from(hex, 'hex');
+      // 检查结果是否为无穷远点 (零点)
+      try {
+        const hex = result.toHex(compressed !== false);
+        // 如果能成功转换为hex，说明不是零点
+        return Buffer.from(hex, 'hex');
+      } catch {
+        // 转换失败可能是零点
+        return null;
+      }
     } catch {
       return null;
     }
@@ -128,13 +134,18 @@ const ecc = {
       }
       const tweakPoint = secp.Point.fromPrivateKey(tweak);
       const result = point.add(tweakPoint);
-      if (result.equals(secp.Point.ZERO)) return null;
-      const resultHex = result.toHex(true);
-      const resultBytes = Buffer.from(resultHex, 'hex');
-      return {
-        parity: resultBytes[0] === 0x02 ? 0 : 1,
-        xOnlyPubkey: resultBytes.slice(1)
-      };
+      // 检查结果是否为无穷远点 (零点)
+      try {
+        const resultHex = result.toHex(true);
+        const resultBytes = Buffer.from(resultHex, 'hex');
+        return {
+          parity: resultBytes[0] === 0x02 ? 0 : 1,
+          xOnlyPubkey: resultBytes.slice(1)
+        };
+      } catch {
+        // 转换失败可能是零点
+        return null;
+      }
     } catch {
       return null;
     }
@@ -173,6 +184,33 @@ try {
 } catch (error) {
   console.error('❌ bitcoinjs-lib ECC 初始化失败:', error);
 }
+
+// 测试 ECC 方法
+function testEccMethods() {
+  console.log('🧪 测试 ECC 方法...');
+  try {
+    // 测试私钥
+    const testPrivKey = Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex');
+    console.log('✓ isPrivate:', ecc.isPrivate(testPrivKey));
+    
+    // 测试生成公钥
+    const pubKey = ecc.pointFromScalar(testPrivKey, true);
+    console.log('✓ pointFromScalar:', pubKey ? 'OK' : 'FAILED');
+    
+    if (pubKey) {
+      console.log('✓ isPoint:', ecc.isPoint(pubKey));
+      
+      // 测试 pointMultiply
+      const tweak = Buffer.from('0000000000000000000000000000000000000000000000000000000000000002', 'hex');
+      const multiplied = ecc.pointMultiply(pubKey, tweak, true);
+      console.log('✓ pointMultiply:', multiplied ? 'OK' : 'FAILED');
+    }
+  } catch (err) {
+    console.error('❌ ECC 方法测试失败:', err);
+  }
+}
+
+testEccMethods();
 
 // 创建 BIP32 工厂
 let _bip32Instance: BIP32API | null = null;
