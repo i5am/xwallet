@@ -88,10 +88,44 @@ function App() {
 
   // 生成接收地址二维码 (支持简单格式和协议格式)
   useEffect(() => {
-    // 临时禁用 QR 码生成以测试稳定性
     if (showReceiveDialog && selectedWallet) {
-      // 生成占位符 QR 码
-      setQrCodeDataUrl('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjE0IiBmaWxsPSIjNjY2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+UVIg5Luj56CB5Y2g5L2N5ZmoPC90ZXh0Pjwvc3ZnPg==');
+      const generateQRCode = async () => {
+        try {
+          let qrData: string;
+          
+          if (useProtocolFormat) {
+            // 使用协议格式
+            const message = ProtocolUtils.createAddressInfo({
+              address: selectedWallet.address,
+              chain: selectedWallet.chain,
+              network: selectedWallet.network,
+              publicKey: selectedWallet.publicKey,
+              label: selectedWallet.name
+            });
+            qrData = JSON.stringify(message);
+          } else {
+            // 使用简单格式（纯地址）
+            qrData = selectedWallet.address;
+          }
+          
+          const dataUrl = await QRCode.toDataURL(qrData, {
+            width: 256,
+            margin: 2,
+            color: {
+              dark: '#000000',
+              light: '#ffffff'
+            }
+          });
+          
+          setQrCodeDataUrl(dataUrl);
+        } catch (error) {
+          console.error('生成二维码失败:', error);
+          // 生成错误占位符
+          setQrCodeDataUrl('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2ZmZWVlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjE0IiBmaWxsPSIjZGQ0NDQ0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+55Sf5oiQ5aSx6LSlPC90ZXh0Pjwvc3ZnPg==');
+        }
+      };
+      
+      generateQRCode();
     }
   }, [showReceiveDialog, selectedWallet, useProtocolFormat]);
 
@@ -635,7 +669,8 @@ function App() {
   // 打开输入扫描对话框
   const openInputScan = (title: string, callback: (value: string) => void) => {
     setScanInputTitle(title);
-    setScanInputCallback(() => callback);
+    // 修复: 使用双层箭头函数正确保存 callback
+    setScanInputCallback(() => (value: string) => callback(value));
     setShowInputScanDialog(true);
     setTimeout(() => startInputScan(), 300);
   };
