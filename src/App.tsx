@@ -3,13 +3,14 @@ import { Wallet, WalletType, ChainType, NetworkType } from './types';
 import * as bip39 from 'bip39';
 import QRCode from 'qrcode';
 import jsQR from 'jsqr';
+import Tesseract from 'tesseract.js';
 import { BTCAdapter } from './services/blockchain/BTCAdapter-harmonyos';
 import { ETHAdapter } from './services/blockchain/ETHAdapter';
 import { FlightsparkAdapter } from './services/flightspark/FlightsparkAdapter';
 import { AIServicePayment } from './types/flightspark';
 import { getNetworkConfig } from './config';
 import { formatAddress } from './utils';
-import { ProtocolUtils, MessageType } from './utils/protocol';
+import { ProtocolUtils } from './utils/protocol';
 import { WalletStorage } from './services/storage/WalletStorage';
 import { PasswordService } from './services/storage/PasswordService';
 import { Wallet as WalletIcon, Plus, ArrowUpRight, ArrowDownLeft, Settings, Zap, X, Camera, QrCode as QrCodeIcon, Lock, Eye, EyeOff } from 'lucide-react';
@@ -68,6 +69,15 @@ function App() {
   const [showInputScanDialog, setShowInputScanDialog] = useState(false);
   const [scanInputCallback, setScanInputCallback] = useState<((value: string) => void) | null>(null);
   const [scanInputTitle, setScanInputTitle] = useState<string>('扫描二维码');
+  
+  // OCR 相关状态
+  const [showOCRDialog, setShowOCRDialog] = useState(false);
+  const [ocrCallback, setOCRCallback] = useState<((value: string) => void) | null>(null);
+  const [isOCRProcessing, setIsOCRProcessing] = useState(false);
+  const [ocrProgress, setOCRProgress] = useState(0);
+  const ocrVideoRef = useRef<HTMLVideoElement>(null);
+  const ocrCanvasRef = useRef<HTMLCanvasElement>(null);
+  const ocrStreamRef = useRef<MediaStream | null>(null);
   
   // 离线交易相关状态
   const [unsignedTxQrCode, setUnsignedTxQrCode] = useState<string>('');
@@ -826,6 +836,122 @@ function App() {
     setShowInputScanDialog(false);
     setScanInputCallback(null);
     inputCallbackRef.current = null;
+  };
+
+  // 打开 OCR 对话框
+  const openOCR = (callback: (value: string) => void) => {
+    console.log('📸 打开 OCR 识别对话框');
+    setOCRCallback(() => callback);
+    setShowOCRDialog(true);
+    setOCRProgress(0);
+    setIsOCRProcessing(false);
+    setTimeout(() => startOCRCamera(), 300);
+  };
+
+  // 启动 OCR 摄像头
+  const startOCRCamera = async () => {
+    try {
+      console.log('📷 启动 OCR 摄像头...');
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        } 
+      });
+      
+      if (ocrVideoRef.current) {
+        ocrVideoRef.current.srcObject = stream;
+        ocrStreamRef.current = stream;
+        await ocrVideoRef.current.play();
+        console.log('✅ OCR 摄像头已启动');
+      }
+    } catch (error) {
+      console.error('❌ 启动 OCR 摄像头失败:', error);
+      alert('无法访问摄像头: ' + (error as Error).message);
+    }
+  };
+
+  // 停止 OCR 摄像头
+  const stopOCRCamera = () => {
+    if (ocrStreamRef.current) {
+      ocrStreamRef.current.getTracks().forEach(track => track.stop());
+      ocrStreamRef.current = null;
+    }
+    if (ocrVideoRef.current) {
+      ocrVideoRef.current.srcObject = null;
+    }
+  };
+
+  // 拍照并进行 OCR 识别
+  const captureAndRecognize = async () => {
+    if (!ocrVideoRef.current || !ocrCanvasRef.current) {
+      alert('摄像头未就绪');
+      return;
+    }
+
+    try {
+      setIsOCRProcessing(true);
+      setOCRProgress(0);
+
+      // 拍照
+      const video = ocrVideoRef.current;
+      const canvas = ocrCanvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('无法获取 Canvas 上下文');
+      }
+      ctx.drawImage(video, 0, 0);
+
+      console.log('📸 已拍照，开始 OCR 识别...');
+
+      // OCR 识别
+      const result = await Tesseract.recognize(
+        canvas,
+        'eng+chi_sim', // 英文 + 简体中文
+        {
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              setOCRProgress(Math.round(m.progress * 100));
+              console.log(`📊 OCR 进度: ${Math.round(m.progress * 100)}%`);
+            }
+          }
+        }
+      );
+
+      const text = result.data.text.trim();
+      console.log('✅ OCR 识别完成:', text);
+
+      if (!text) {
+        alert('未识别到文字，请重新拍摄');
+        setIsOCRProcessing(false);
+        return;
+      }
+
+      // 回调
+      if (ocrCallback) {
+        ocrCallback(text);
+      }
+
+      // 关闭对话框
+      closeOCR();
+      alert(`✅ 识别成功！\n\n识别到 ${text.length} 个字符`);
+    } catch (error) {
+      console.error('❌ OCR 识别失败:', error);
+      alert('OCR 识别失败: ' + (error as Error).message);
+      setIsOCRProcessing(false);
+    }
+  };
+
+  // 关闭 OCR 对话框
+  const closeOCR = () => {
+    stopOCRCamera();
+    setShowOCRDialog(false);
+    setOCRCallback(null);
+    setIsOCRProcessing(false);
+    setOCRProgress(0);
   };
 
   // 生成未签名交易
@@ -1688,33 +1814,6 @@ function App() {
                             alert('⚠️ 请先创建或选择一个钱包');
                             return;
                           }
-                          // 暂时禁用，使用发送对话框中的按钮
-                          alert('请在发送对话框中生成未签名交易');
-                        }}
-                        className="btn-secondary flex items-center justify-center gap-2"
-                      >
-                        <Camera className="w-5 h-5" />
-                        扫描未签名交易
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (!selectedWallet) {
-                            alert('⚠️ 请先创建或选择一个钱包');
-                            return;
-                          }
-                          alert('请在发送对话框中扫描已签名交易');
-                        }}
-                        className="btn-secondary flex items-center justify-center gap-2"
-                      >
-                        <Camera className="w-5 h-5" />
-                        扫描已签名交易
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (!selectedWallet) {
-                            alert('⚠️ 请先创建或选择一个钱包');
-                            return;
-                          }
                           loadTransactionHistory();
                           setShowTransactionHistory(true);
                         }}
@@ -2133,8 +2232,9 @@ function App() {
                       </button>
                       <button
                         onClick={() => {
-                          alert('🚧 OCR 功能开发中...\n\n将集成 Tesseract.js 进行文字识别');
-                          // TODO: 实现 OCR 功能
+                          openOCR((text) => {
+                            setSignMessage(text);
+                          });
                         }}
                         className="px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded transition-colors flex items-center justify-center whitespace-nowrap"
                         title="OCR 文字识别"
@@ -3760,6 +3860,82 @@ function App() {
                 >
                   取消
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* OCR 识别对话框 */}
+        {showOCRDialog && (
+          <div className="dialog-overlay" style={{ zIndex: 70 }}>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                  <span className="text-2xl">📷</span>
+                  OCR 文字识别
+                </h2>
+                <button
+                  onClick={closeOCR}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  disabled={isOCRProcessing}
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="relative bg-black rounded-lg overflow-hidden" style={{ height: '400px' }}>
+                  <video 
+                    ref={ocrVideoRef}
+                    className="w-full h-full object-cover"
+                    playsInline
+                  />
+                  <canvas 
+                    ref={ocrCanvasRef}
+                    className="hidden"
+                  />
+                  {!isOCRProcessing && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-64 h-48 border-4 border-green-500 rounded-lg"></div>
+                    </div>
+                  )}
+                  {isOCRProcessing && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
+                      <div className="text-center">
+                        <div className="text-white text-lg mb-2">识别中...</div>
+                        <div className="w-48 bg-gray-700 rounded-full h-2">
+                          <div 
+                            className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${ocrProgress}%` }}
+                          ></div>
+                        </div>
+                        <div className="text-white text-sm mt-2">{ocrProgress}%</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-center text-gray-600 dark:text-gray-400 text-sm">
+                  {!isOCRProcessing ? '对准文字，点击拍照识别' : '正在识别，请稍候...'}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={closeOCR}
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white p-3 rounded transition-colors"
+                    disabled={isOCRProcessing}
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={captureAndRecognize}
+                    className="flex-2 bg-green-500 hover:bg-green-600 text-white p-3 rounded transition-colors flex items-center justify-center gap-2"
+                    disabled={isOCRProcessing}
+                  >
+                    <Camera className="w-5 h-5" />
+                    拍照识别
+                  </button>
+                </div>
               </div>
             </div>
           </div>
