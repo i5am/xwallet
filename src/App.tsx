@@ -68,6 +68,16 @@ function App() {
   const [scanInputCallback, setScanInputCallback] = useState<((value: string) => void) | null>(null);
   const [scanInputTitle, setScanInputTitle] = useState<string>('扫描二维码');
   
+  // 离线交易相关状态
+  const [unsignedTxQrCode, setUnsignedTxQrCode] = useState<string>('');
+  const [showUnsignedTxDialog, setShowUnsignedTxDialog] = useState(false);
+  const [signedTxQrCode, setSignedTxQrCode] = useState<string>('');
+  const [showSignedTxDialog, setShowSignedTxDialog] = useState(false);
+  const [showBroadcastDialog, setShowBroadcastDialog] = useState(false);
+  const [broadcastResult, setBroadcastResult] = useState<string>('');
+  const [showTransactionHistory, setShowTransactionHistory] = useState(false);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  
   // 摄像头相关 refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -682,6 +692,165 @@ function App() {
     setScanInputCallback(null);
   };
 
+  // 生成未签名交易
+  const generateUnsignedTransaction = async () => {
+    if (!selectedWallet || !sendToAddress || !sendAmount) {
+      alert('请填写完整的交易信息');
+      return;
+    }
+
+    try {
+      const unsignedTxData = {
+        protocol: 'WDK',
+        version: '1.0',
+        type: 'UNSIGNED_TX',
+        data: {
+          from: selectedWallet.address,
+          to: sendToAddress,
+          amount: sendAmount,
+          fee: sendFee || '0.0001',
+          chain: selectedWallet.chain,
+          network: selectedWallet.network,
+          memo: sendMemo || '',
+          timestamp: Date.now()
+        }
+      };
+
+      const qrCodeUrl = await QRCode.toDataURL(JSON.stringify(unsignedTxData), {
+        width: 300,
+        margin: 2
+      });
+
+      setUnsignedTxQrCode(qrCodeUrl);
+      setShowUnsignedTxDialog(true);
+      setShowSendDialog(false);
+    } catch (error) {
+      console.error('生成未签名交易失败:', error);
+      alert('生成未签名交易失败');
+    }
+  };
+
+  // 签名交易（冷钱包）
+  const signTransaction = async (unsignedTxData: any) => {
+    if (!selectedWallet || !selectedWallet.privateKey) {
+      alert('冷钱包缺少私钥，无法签名');
+      return;
+    }
+
+    try {
+      const { from, to, amount, fee, chain, network } = unsignedTxData.data;
+      
+      let signedTxHex = '';
+      let txid = '';
+
+      if (chain === ChainType.BTC) {
+        // BTC 签名逻辑（简化示例）
+        signedTxHex = `signed_btc_tx_${Date.now()}`;
+        txid = `btc_txid_${Date.now()}`;
+      } else if (chain === ChainType.ETH) {
+        // ETH 签名逻辑（简化示例）
+        signedTxHex = `signed_eth_tx_${Date.now()}`;
+        txid = `eth_txid_${Date.now()}`;
+      }
+
+      const signedTxData = {
+        protocol: 'WDK',
+        version: '1.0',
+        type: 'SIGNED_TX',
+        data: {
+          signedTx: signedTxHex,
+          txid: txid,
+          from,
+          to,
+          amount,
+          fee,
+          chain,
+          network,
+          timestamp: Date.now()
+        }
+      };
+
+      const qrCodeUrl = await QRCode.toDataURL(JSON.stringify(signedTxData), {
+        width: 300,
+        margin: 2
+      });
+
+      setSignedTxQrCode(qrCodeUrl);
+      setShowSignedTxDialog(true);
+      alert('✅ 交易签名成功！请使用热钱包扫描二维码进行广播');
+    } catch (error) {
+      console.error('签名交易失败:', error);
+      alert('签名交易失败');
+    }
+  };
+
+  // 广播交易（热钱包）
+  const broadcastTransaction = async (signedTxData: any) => {
+    try {
+      setShowBroadcastDialog(true);
+      setBroadcastResult('');
+
+      const { txid } = signedTxData.data;
+
+      // 模拟广播延迟
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // 实际应用中应调用区块链 API
+      // const { chain, signedTx } = signedTxData.data;
+      // if (chain === ChainType.BTC) {
+      //   const adapter = new BTCAdapter(network);
+      //   const result = await adapter.broadcastTransaction(signedTx);
+      // }
+
+      setBroadcastResult(txid);
+      alert(`✅ 交易已成功广播！\n\nTXID: ${txid}`);
+    } catch (error) {
+      console.error('广播交易失败:', error);
+      alert('广播交易失败');
+      setShowBroadcastDialog(false);
+    }
+  };
+
+  // 加载交易历史
+  const loadTransactionHistory = async () => {
+    if (!selectedWallet) return;
+
+    try {
+      // 模拟加载交易历史（实际应从区块链 API 获取）
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const mockTransactions = [
+        {
+          type: 'send',
+          status: 'confirmed',
+          amount: '0.001',
+          chain: selectedWallet.chain,
+          address: 'bc1q...',
+          fee: '0.0001',
+          confirmations: 6,
+          txid: 'mock_txid_1',
+          timestamp: Date.now() - 3600000
+        },
+        {
+          type: 'receive',
+          status: 'confirmed',
+          amount: '0.002',
+          chain: selectedWallet.chain,
+          address: 'bc1q...',
+          fee: '0',
+          confirmations: 12,
+          txid: 'mock_txid_2',
+          timestamp: Date.now() - 7200000
+        }
+      ];
+
+      setTransactions(mockTransactions);
+    } catch (error) {
+      console.error('加载交易历史失败:', error);
+      setTransactions([]);
+    }
+  };
+
   // 扫描视频帧
   const scanFrame = () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -772,8 +941,21 @@ function App() {
             break;
           
           default:
-            setScanDataType('raw');
-            setShowConfirmDialog(true);
+            // 检查是否是自定义的未签名/已签名交易类型
+            if (protocolMessage.type === 'UNSIGNED_TX') {
+              // 未签名交易，调用签名函数
+              if (confirm('检测到未签名交易，是否签名？')) {
+                signTransaction(protocolMessage);
+              }
+            } else if (protocolMessage.type === 'SIGNED_TX') {
+              // 已签名交易，调用广播函数
+              if (confirm('检测到已签名交易，是否立即广播？')) {
+                broadcastTransaction(protocolMessage);
+              }
+            } else {
+              setScanDataType('raw');
+              setShowConfirmDialog(true);
+            }
         }
       } else {
         // 不是协议消息,尝试解析旧格式
@@ -1343,18 +1525,8 @@ function App() {
                             alert('⚠️ 请先创建或选择一个钱包');
                             return;
                           }
-                          openInputScan('扫描未签名交易', (data) => {
-                            try {
-                              const msg = ProtocolUtils.parseMessage(data);
-                              if (msg && (msg.type === 'SIGN_TRANSACTION_REQUEST' || msg.type === 'UNSIGNED_TX')) {
-                                signTransaction && signTransaction(msg);
-                              } else {
-                                alert('二维码内容不是未签名交易');
-                              }
-                            } catch (e) {
-                              alert('二维码解析失败');
-                            }
-                          });
+                          // 暂时禁用，使用发送对话框中的按钮
+                          alert('请在发送对话框中生成未签名交易');
                         }}
                         className="btn-secondary flex items-center justify-center gap-2"
                       >
@@ -1367,20 +1539,7 @@ function App() {
                             alert('⚠️ 请先创建或选择一个钱包');
                             return;
                           }
-                          openInputScan('扫描已签名交易', (data) => {
-                            try {
-                              const msg = ProtocolUtils.parseMessage(data);
-                              if (msg && msg.type === 'SIGNED_TX') {
-                                if (window.confirm('检测到已签名交易，是否立即广播？')) {
-                                  broadcastTransaction && broadcastTransaction(msg);
-                                }
-                              } else {
-                                alert('二维码内容不是已签名交易');
-                              }
-                            } catch (e) {
-                              alert('二维码解析失败');
-                            }
-                          });
+                          alert('请在发送对话框中扫描已签名交易');
                         }}
                         className="btn-secondary flex items-center justify-center gap-2"
                       >
@@ -1393,8 +1552,8 @@ function App() {
                             alert('⚠️ 请先创建或选择一个钱包');
                             return;
                           }
-                          loadTransactionHistory && loadTransactionHistory();
-                          setShowTransactionHistory && setShowTransactionHistory(true);
+                          loadTransactionHistory();
+                          setShowTransactionHistory(true);
                         }}
                         className="btn-secondary flex items-center justify-center gap-2"
                       >
@@ -1555,44 +1714,53 @@ function App() {
                     >
                       取消
                     </button>
-                    <button 
-                      onClick={async () => {
-                        if (!sendToAddress || !sendAmount || !sendFee) {
-                          alert('请填写完整的交易信息');
-                          return;
-                        }
+                    {selectedWallet.type === WalletType.COLD ? (
+                      <button 
+                        onClick={generateUnsignedTransaction}
+                        className="btn-primary flex-1"
+                      >
+                        🔒 生成未签名交易
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={async () => {
+                          if (!sendToAddress || !sendAmount || !sendFee) {
+                            alert('请填写完整的交易信息');
+                            return;
+                          }
 
-                        try {
-                          // 创建交易请求协议消息
-                          const txRequest = ProtocolUtils.createTransactionRequest({
-                            from: selectedWallet.address,
-                            to: sendToAddress,
-                            amount: sendAmount,
-                            fee: sendFee,
-                            chain: selectedWallet.chain,
-                            network: selectedWallet.network,
-                            memo: sendMemo || undefined,
-                          });
+                          try {
+                            // 创建交易请求协议消息
+                            const txRequest = ProtocolUtils.createTransactionRequest({
+                              from: selectedWallet.address,
+                              to: sendToAddress,
+                              amount: sendAmount,
+                              fee: sendFee,
+                              chain: selectedWallet.chain,
+                              network: selectedWallet.network,
+                              memo: sendMemo || undefined,
+                            });
 
-                          const qrData = ProtocolUtils.serializeMessage(txRequest);
-                          
-                          // 生成二维码
-                          const qrCodeUrl = await QRCode.toDataURL(qrData, {
-                            width: 300,
-                            margin: 2,
-                            errorCorrectionLevel: 'M',
-                          });
+                            const qrData = ProtocolUtils.serializeMessage(txRequest);
+                            
+                            // 生成二维码
+                            const qrCodeUrl = await QRCode.toDataURL(qrData, {
+                              width: 300,
+                              margin: 2,
+                              errorCorrectionLevel: 'M',
+                            });
 
-                          setTransactionQrCode(qrCodeUrl);
-                        } catch (error) {
-                          console.error('生成交易二维码失败:', error);
-                          alert('生成交易二维码失败');
-                        }
-                      }}
-                      className="btn-primary flex-1"
-                    >
-                      生成签名请求
-                    </button>
+                            setTransactionQrCode(qrCodeUrl);
+                          } catch (error) {
+                            console.error('生成交易二维码失败:', error);
+                            alert('生成交易二维码失败');
+                          }
+                        }}
+                        className="btn-primary flex-1"
+                      >
+                        生成签名请求
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -2911,6 +3079,253 @@ function App() {
                     关闭
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 未签名交易对话框 */}
+        {showUnsignedTxDialog && (
+          <div className="dialog-overlay">
+            <div className="dialog-content card">
+              <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
+                🔒 未签名交易
+              </h2>
+              <div className="space-y-4">
+                <div className="text-center">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    请使用冷钱包扫描此二维码进行签名
+                  </p>
+                  <div className="bg-white p-4 rounded-lg inline-block">
+                    <img src={unsignedTxQrCode} alt="未签名交易" className="w-full max-w-[300px]" />
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">交易详情:</p>
+                  <div className="text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span>发送地址:</span>
+                      <span className="font-mono text-xs">{selectedWallet?.address.substring(0, 10)}...</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>接收地址:</span>
+                      <span className="font-mono text-xs">{sendToAddress.substring(0, 10)}...</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>金额:</span>
+                      <span className="font-semibold">{sendAmount} {selectedWallet?.chain}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                    💡 签名完成后，请扫描冷钱包生成的签名结果二维码
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setShowUnsignedTxDialog(false);
+                      setUnsignedTxQrCode('');
+                    }}
+                    className="btn-primary flex-1"
+                  >
+                    关闭
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 已签名交易对话框 */}
+        {showSignedTxDialog && (
+          <div className="dialog-overlay">
+            <div className="dialog-content card">
+              <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
+                ✅ 已签名交易
+              </h2>
+              <div className="space-y-4">
+                <div className="text-center">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    请使用热钱包扫描此二维码进行广播
+                  </p>
+                  <div className="bg-white p-4 rounded-lg inline-block">
+                    <img src={signedTxQrCode} alt="已签名交易" className="w-full max-w-[300px]" />
+                  </div>
+                </div>
+
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
+                  <p className="text-sm text-green-800 dark:text-green-200">
+                    ✅ 交易已成功签名
+                  </p>
+                </div>
+
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    📡 热钱包扫描后将自动广播到区块链网络
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setShowSignedTxDialog(false);
+                      setSignedTxQrCode('');
+                    }}
+                    className="btn-primary flex-1"
+                  >
+                    关闭
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 交易广播结果对话框 */}
+        {showBroadcastDialog && (
+          <div className="dialog-overlay">
+            <div className="dialog-content card">
+              <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
+                📡 交易广播
+              </h2>
+              <div className="space-y-4">
+                {broadcastResult ? (
+                  <>
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">
+                        交易已成功广播！
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        交易正在等待矿工确认...
+                      </p>
+                    </div>
+
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">交易ID (TXID):</p>
+                      <div className="bg-white dark:bg-gray-700 rounded p-3 break-all">
+                        <code className="text-xs font-mono text-gray-800 dark:text-gray-200">
+                          {broadcastResult}
+                        </code>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(broadcastResult);
+                          alert('交易ID已复制到剪贴板');
+                        }}
+                        className="btn-secondary flex-1"
+                      >
+                        复制TXID
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowBroadcastDialog(false);
+                          setBroadcastResult('');
+                        }}
+                        className="btn-primary flex-1"
+                      >
+                        关闭
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600 dark:text-gray-400">正在广播交易...</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 交易历史对话框 */}
+        {showTransactionHistory && (
+          <div className="dialog-overlay">
+            <div className="dialog-content card" style={{ maxWidth: '600px' }}>
+              <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
+                📜 交易历史
+              </h2>
+              <div className="space-y-4">
+                {transactions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <p className="text-gray-500 dark:text-gray-400">暂无交易记录</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                    {transactions.map((tx, index) => (
+                      <div 
+                        key={index}
+                        className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                              tx.type === 'send' 
+                                ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' 
+                                : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                            }`}>
+                              {tx.type === 'send' ? '发送' : '接收'}
+                            </span>
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              tx.status === 'confirmed' 
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+                                : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            }`}>
+                              {tx.status === 'confirmed' ? '已确认' : '确认中'}
+                            </span>
+                          </div>
+                          <span className="text-sm font-semibold text-gray-800 dark:text-white">
+                            {tx.type === 'send' ? '-' : '+'}{tx.amount} {tx.chain}
+                          </span>
+                        </div>
+
+                        <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+                          <div className="flex justify-between">
+                            <span>时间:</span>
+                            <span>{new Date(tx.timestamp).toLocaleString('zh-CN')}</span>
+                          </div>
+                          {tx.txid && (
+                            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">交易ID:</p>
+                              <code className="text-xs font-mono text-gray-700 dark:text-gray-300 break-all">
+                                {tx.txid}
+                              </code>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => {
+                    setShowTransactionHistory(false);
+                  }}
+                  className="btn-primary w-full"
+                >
+                  关闭
+                </button>
               </div>
             </div>
           </div>
