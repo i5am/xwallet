@@ -9,7 +9,7 @@ import { FlightsparkAdapter } from './services/flightspark/FlightsparkAdapter';
 import { AIServicePayment } from './types/flightspark';
 import { getNetworkConfig } from './config';
 import { formatAddress } from './utils';
-import { ProtocolUtils } from './utils/protocol';
+import { ProtocolUtils, MessageType } from './utils/protocol';
 import { WalletStorage } from './services/storage/WalletStorage';
 import { PasswordService } from './services/storage/PasswordService';
 import { Wallet as WalletIcon, Plus, ArrowUpRight, ArrowDownLeft, Settings, Zap, X, Camera, QrCode as QrCodeIcon, Lock, Eye, EyeOff } from 'lucide-react';
@@ -37,6 +37,7 @@ function App() {
   const [importType, setImportType] = useState<'mnemonic' | 'privateKey'>('mnemonic');
   const [importMnemonic, setImportMnemonic] = useState<string>('');
   const [importPrivateKey, setImportPrivateKey] = useState<string>('');
+  const [importAddress, setImportAddress] = useState<string>('');
   const [importChain, setImportChain] = useState<ChainType>(ChainType.BTC);
   const [importWalletType, setImportWalletType] = useState<WalletType>(WalletType.HOT);
   const [scanResult, setScanResult] = useState<any>(null);
@@ -243,7 +244,34 @@ function App() {
       const network = NetworkType.MAINNET;
       const networkConfig = getNetworkConfig(importChain, network);
 
-      if (importType === 'mnemonic') {
+      // 观察钱包：只需要地址
+      if (importWalletType === WalletType.WATCH_ONLY) {
+        if (!importAddress.trim()) {
+          alert('请输入钱包地址');
+          return;
+        }
+        
+        address = importAddress.trim();
+        
+        // 简单验证地址格式
+        if (importChain === ChainType.BTC) {
+          if (!address.startsWith('bc1') && !address.startsWith('1') && !address.startsWith('3')) {
+            alert('❌ 不是有效的 BTC 地址格式');
+            return;
+          }
+        } else {
+          if (!address.startsWith('0x') || address.length !== 42) {
+            alert('❌ 不是有效的 ETH 地址格式');
+            return;
+          }
+        }
+        
+        // 观察钱包没有私钥和助记词
+        privateKey = '';
+        publicKey = '';
+      }
+      // 热钱包/冷钱包：需要私钥或助记词
+      else if (importType === 'mnemonic') {
         // 通过助记词导入
         if (!importMnemonic.trim()) {
           alert('请输入助记词');
@@ -291,17 +319,27 @@ function App() {
         }
       }
 
+      // 钱包类型名称
+      let walletTypeName = '';
+      if (importWalletType === WalletType.HOT) {
+        walletTypeName = '热';
+      } else if (importWalletType === WalletType.COLD) {
+        walletTypeName = '冷';
+      } else {
+        walletTypeName = '观察';
+      }
+
       // 创建钱包对象
       const newWallet: Wallet = {
         id: Date.now().toString(),
-        name: `${importChain === ChainType.BTC ? 'BTC' : 'ETH'} ${importWalletType === WalletType.HOT ? '热' : '冷'}钱包 (导入)`,
+        name: `${importChain === ChainType.BTC ? 'BTC' : 'ETH'} ${walletTypeName}钱包 (导入)`,
         type: importWalletType,
         chain: importChain,
         network,
         address,
-        mnemonic,
-        privateKey,
-        publicKey,
+        mnemonic: importWalletType === WalletType.WATCH_ONLY ? undefined : mnemonic,
+        privateKey: importWalletType === WalletType.WATCH_ONLY ? undefined : privateKey,
+        publicKey: importWalletType === WalletType.WATCH_ONLY ? undefined : publicKey,
         createdAt: Date.now(),
         updatedAt: Date.now(),
         isOnline: importWalletType === WalletType.HOT,
@@ -316,6 +354,7 @@ function App() {
       setShowImportDialog(false);
       setImportMnemonic('');
       setImportPrivateKey('');
+      setImportAddress('');
       alert(`✅ 钱包导入成功！\n\n地址: ${address}`);
     } catch (error) {
       alert(`❌ 导入钱包失败: ${(error as Error).message}`);
@@ -1535,6 +1574,13 @@ function App() {
                         </p>
                       </div>
                     )}
+                    {selectedWallet.type === WalletType.WATCH_ONLY && (
+                      <div className="mt-4 px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg">
+                        <p className="text-sm text-gray-800 dark:text-gray-200">
+                          👁️ 观察钱包模式 - 只能查看余额和交易历史，无法发送和签名
+                        </p>
+                      </div>
+                    )}
                     {Number(walletBalance) === 0 && selectedWallet.type === WalletType.HOT && !isLoadingBalance && (
                       <div className="mt-4 px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg">
                         <p className="text-sm text-yellow-800 dark:text-yellow-200">
@@ -1551,12 +1597,22 @@ function App() {
                           alert('⚠️ 请先创建或选择一个钱包');
                           return;
                         }
+                        if (selectedWallet.type === WalletType.WATCH_ONLY) {
+                          alert('👁️ 观察钱包无法发送交易\n\n观察钱包仅用于查看余额和交易历史，不包含私钥，因此无法签名和发送交易。');
+                          return;
+                        }
                         setShowSendDialog(true);
                       }}
-                      className="btn-primary flex items-center justify-center gap-2"
+                      className={`btn-primary flex items-center justify-center gap-2 ${
+                        selectedWallet?.type === WalletType.WATCH_ONLY 
+                          ? 'opacity-50 cursor-not-allowed' 
+                          : ''
+                      }`}
+                      disabled={selectedWallet?.type === WalletType.WATCH_ONLY}
                     >
                       <ArrowUpRight className="w-5 h-5" />
                       发送
+                      {selectedWallet?.type === WalletType.WATCH_ONLY && ' 🔒'}
                     </button>
                     <button 
                       onClick={() => {
@@ -1579,11 +1635,21 @@ function App() {
                           alert('⚠️ 请先创建或选择一个钱包');
                           return;
                         }
+                        if (selectedWallet.type === WalletType.WATCH_ONLY) {
+                          alert('👁️ 观察钱包无法签名\n\n观察钱包不包含私钥，因此无法对交易进行签名。');
+                          return;
+                        }
                         setShowSignDialog(true);
                       }}
-                      className="btn-secondary flex items-center justify-center gap-2"
+                      className={`btn-secondary flex items-center justify-center gap-2 ${
+                        selectedWallet?.type === WalletType.WATCH_ONLY 
+                          ? 'opacity-50 cursor-not-allowed' 
+                          : ''
+                      }`}
+                      disabled={selectedWallet?.type === WalletType.WATCH_ONLY}
                     >
                       ✍️ 签名
+                      {selectedWallet?.type === WalletType.WATCH_ONLY && ' 🔒'}
                     </button>
                     <button 
                       onClick={() => {
@@ -1913,6 +1979,27 @@ function App() {
                     </button>
                     <button 
                       onClick={() => {
+                        openInputScan('扫描已签名交易', async (value) => {
+                          try {
+                            const data = JSON.parse(value);
+                            if (data.type === 'SIGNED_TX') {
+                              alert('✅ 已扫描已签名交易，准备广播...');
+                              await broadcastTransaction(data);
+                            } else {
+                              alert('❌ 这不是已签名交易二维码');
+                            }
+                          } catch (error) {
+                            alert('❌ 二维码格式错误: ' + (error as Error).message);
+                          }
+                        });
+                      }}
+                      className="btn-primary flex-1 flex items-center justify-center gap-2"
+                    >
+                      <Camera className="w-5 h-5" />
+                      扫描签名结果
+                    </button>
+                    <button 
+                      onClick={() => {
                         setShowSendDialog(false);
                         setTransactionQrCode('');
                         setSendToAddress('');
@@ -1920,7 +2007,7 @@ function App() {
                         setSendFee('');
                         setSendMemo('');
                       }}
-                      className="btn-primary flex-1"
+                      className="btn-secondary flex-1"
                     >
                       关闭
                     </button>
@@ -2017,12 +2104,48 @@ function App() {
               <div className="space-y-4">
                 <div>
                   <label className="text-sm text-gray-600 dark:text-gray-400">要签名的消息</label>
-                  <textarea
-                    value={signMessage}
-                    onChange={(e) => setSignMessage(e.target.value)}
-                    className="input-field min-h-32"
-                    placeholder="输入要签名的消息内容..."
-                  />
+                  <div className="flex gap-2">
+                    <textarea
+                      value={signMessage}
+                      onChange={(e) => setSignMessage(e.target.value)}
+                      className="input-field min-h-32 flex-1"
+                      placeholder="输入要签名的消息内容..."
+                    />
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={() => openInputScan('扫描未签名交易', (value) => {
+                          try {
+                            const data = JSON.parse(value);
+                            if (data.type === 'UNSIGNED_TX') {
+                              setSignMessage(value);
+                              alert('✅ 已扫描未签名交易');
+                            } else {
+                              setSignMessage(value);
+                            }
+                          } catch {
+                            setSignMessage(value);
+                          }
+                        })}
+                        className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors flex items-center justify-center whitespace-nowrap"
+                        title="扫描二维码"
+                      >
+                        <Camera className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          alert('🚧 OCR 功能开发中...\n\n将集成 Tesseract.js 进行文字识别');
+                          // TODO: 实现 OCR 功能
+                        }}
+                        className="px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded transition-colors flex items-center justify-center whitespace-nowrap"
+                        title="OCR 文字识别"
+                      >
+                        <span className="text-lg">📷</span>
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    💡 可以扫描二维码或使用 OCR 识别文字
+                  </p>
                 </div>
                 
                 {signedQrCode && (
@@ -2174,33 +2297,57 @@ function App() {
               </div>
 
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">导入方式</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => setImportType('mnemonic')}
-                      className={`p-2 rounded border transition-colors ${
-                        importType === 'mnemonic'
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                          : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      助记词
-                    </button>
-                    <button
-                      onClick={() => setImportType('privateKey')}
-                      className={`p-2 rounded border transition-colors ${
-                        importType === 'privateKey'
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                          : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      私钥
-                    </button>
+                {/* 观察钱包只需要地址，不需要选择导入方式 */}
+                {importWalletType !== WalletType.WATCH_ONLY && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">导入方式</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setImportType('mnemonic')}
+                        className={`p-2 rounded border transition-colors ${
+                          importType === 'mnemonic'
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                            : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        助记词
+                      </button>
+                      <button
+                        onClick={() => setImportType('privateKey')}
+                        className={`p-2 rounded border transition-colors ${
+                          importType === 'privateKey'
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                            : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        私钥
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {importType === 'mnemonic' ? (
+                {/* 观察钱包：显示地址输入框 */}
+                {importWalletType === WalletType.WATCH_ONLY ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">钱包地址</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={importAddress}
+                        onChange={(e) => setImportAddress(e.target.value)}
+                        className="flex-1 p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded focus:ring-2 focus:ring-blue-500 dark:text-white"
+                        placeholder={importChain === ChainType.BTC ? 'bc1q...' : '0x...'}
+                      />
+                      <button
+                        onClick={() => openInputScan('扫描地址', (value) => setImportAddress(value))}
+                        className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors flex items-center justify-center"
+                        title="扫描二维码"
+                      >
+                        <Camera className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : importType === 'mnemonic' ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">助记词</label>
                     <div className="flex gap-2">
@@ -2270,7 +2417,7 @@ function App() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">钱包类型</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       onClick={() => setImportWalletType(WalletType.HOT)}
                       className={`p-2 rounded border transition-colors ${
@@ -2291,7 +2438,22 @@ function App() {
                     >
                       冷钱包
                     </button>
+                    <button
+                      onClick={() => setImportWalletType(WalletType.WATCH_ONLY)}
+                      className={`p-2 rounded border transition-colors ${
+                        importWalletType === WalletType.WATCH_ONLY
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                          : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      观察钱包
+                    </button>
                   </div>
+                  {importWalletType === WalletType.WATCH_ONLY && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      👁️ 观察钱包只能查看余额和交易历史，无法发送交易
+                    </p>
+                  )}
                 </div>
 
                 <button
@@ -2320,6 +2482,133 @@ function App() {
               </div>
 
               <div className="space-y-4">
+                {/* 钱包模式切换 */}
+                {selectedWallet && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      当前钱包模式
+                    </label>
+                    <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                          {selectedWallet.name}
+                        </span>
+                        <span className="text-2xl">
+                          {selectedWallet.type === WalletType.HOT && '🔥'}
+                          {selectedWallet.type === WalletType.COLD && '❄️'}
+                          {selectedWallet.type === WalletType.WATCH_ONLY && '👁️'}
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">切换钱包模式:</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <button
+                            onClick={() => {
+                              if (selectedWallet.type === WalletType.HOT) {
+                                alert('✅ 当前已经是热钱包模式');
+                                return;
+                              }
+                              if (!selectedWallet.privateKey) {
+                                alert('❌ 观察钱包无法切换为热钱包\n\n观察钱包不包含私钥，无法进行签名操作。');
+                                return;
+                              }
+                              const updatedWallets = wallets.map(w => 
+                                w.id === selectedWallet.id 
+                                  ? { ...w, type: WalletType.HOT, isOnline: true }
+                                  : w
+                              );
+                              setWallets(updatedWallets);
+                              setSelectedWallet({ ...selectedWallet, type: WalletType.HOT, isOnline: true });
+                              WalletStorage.saveWallets(updatedWallets);
+                              alert('✅ 已切换为热钱包模式\n\n钱包将自动同步余额');
+                            }}
+                            className={`p-2 text-sm rounded border transition-colors ${
+                              selectedWallet.type === WalletType.HOT
+                                ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300'
+                                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                            }`}
+                          >
+                            🔥 热钱包
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (selectedWallet.type === WalletType.COLD) {
+                                alert('✅ 当前已经是冷钱包模式');
+                                return;
+                              }
+                              if (!selectedWallet.privateKey) {
+                                alert('❌ 观察钱包无法切换为冷钱包\n\n观察钱包不包含私钥，无法进行签名操作。');
+                                return;
+                              }
+                              const updatedWallets = wallets.map(w => 
+                                w.id === selectedWallet.id 
+                                  ? { ...w, type: WalletType.COLD, isOnline: false }
+                                  : w
+                              );
+                              setWallets(updatedWallets);
+                              setSelectedWallet({ ...selectedWallet, type: WalletType.COLD, isOnline: false });
+                              WalletStorage.saveWallets(updatedWallets);
+                              alert('✅ 已切换为冷钱包模式\n\n钱包将断开网络连接，手动刷新余额');
+                            }}
+                            className={`p-2 text-sm rounded border transition-colors ${
+                              selectedWallet.type === WalletType.COLD
+                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                            }`}
+                          >
+                            ❄️ 冷钱包
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (selectedWallet.type === WalletType.WATCH_ONLY) {
+                                alert('✅ 当前已经是观察钱包模式');
+                                return;
+                              }
+                              const confirmed = confirm('⚠️ 切换为观察钱包将清除私钥\n\n确定要继续吗？\n\n提示：请确保已备份助记词或私钥！');
+                              if (!confirmed) return;
+                              
+                              const updatedWallets = wallets.map(w => 
+                                w.id === selectedWallet.id 
+                                  ? { 
+                                      ...w, 
+                                      type: WalletType.WATCH_ONLY, 
+                                      isOnline: true,
+                                      privateKey: undefined,
+                                      mnemonic: undefined,
+                                      publicKey: undefined
+                                    }
+                                  : w
+                              );
+                              setWallets(updatedWallets);
+                              setSelectedWallet({ 
+                                ...selectedWallet, 
+                                type: WalletType.WATCH_ONLY, 
+                                isOnline: true,
+                                privateKey: undefined,
+                                mnemonic: undefined,
+                                publicKey: undefined
+                              });
+                              WalletStorage.saveWallets(updatedWallets);
+                              alert('✅ 已切换为观察钱包模式\n\n私钥已清除，仅可查看余额和交易历史');
+                            }}
+                            className={`p-2 text-sm rounded border transition-colors ${
+                              selectedWallet.type === WalletType.WATCH_ONLY
+                                ? 'border-gray-500 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                            }`}
+                          >
+                            👁️ 观察
+                          </button>
+                        </div>
+                        <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
+                          ⚠️ 切换为观察钱包将永久删除私钥，请谨慎操作！
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">密码设置</label>
                   <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded">

@@ -152,10 +152,150 @@ commit 67a1cd4 - fix: 修复扫描 callback 未保存的问题
 
 ### 待办事项
 
-- [ ] 观察钱包功能（只读模式，无私钥）
+- [x] 观察钱包功能（只读模式，无私钥）
+- [x] 钱包模式切换（在设置中切换热钱包/冷钱包/观察钱包）
+- [x] 签名功能扫描未签名交易二维码
+- [x] 扫描已签名交易二维码并广播
+- [ ] OCR 文字识别功能（调用摄像头识别文字）
 - [ ] 对接实际的区块链广播 API
 - [ ] 实现真实的交易历史查询
 - [ ] 添加交易状态实时更新
+
+## 2025-10-28 观察钱包和签名功能完善
+
+### 新增功能
+
+#### 6. 观察钱包功能 👁️
+- **功能**: 只读模式，无私钥，仅查看余额和交易历史
+- **实现**:
+  - 导入钱包时可选择"观察钱包"类型
+  - 只需输入地址，不需要私钥或助记词
+  - 禁用发送和签名按钮
+  - 显示观察钱包专属提示
+- **位置**: 
+  - 导入逻辑: `src/App.tsx` Line ~237
+  - UI 按钮禁用: Line ~1600, ~1635
+  - 钱包详情: Line ~3080
+
+#### 7. 钱包模式切换 ⚙️
+- **功能**: 在设置中动态切换钱包模式
+- **支持模式**:
+  - 🔥 **热钱包** → 自动同步余额，可发送和签名
+  - ❄️ **冷钱包** → 手动刷新余额，可签名，断网使用
+  - 👁️ **观察钱包** → 只读模式，无私钥（⚠️ 切换后不可逆）
+- **安全机制**:
+  - 切换为观察钱包前需要确认
+  - 切换后永久删除私钥和助记词
+  - 观察钱包无法切换回热/冷钱包
+- **位置**: `src/App.tsx` Line ~2485
+
+#### 8. 签名功能完善 ✍️
+- **新增**: 扫描未签名交易二维码
+- **实现**:
+  - 签名对话框添加扫描按钮
+  - 自动识别 UNSIGNED_TX 类型
+  - 填充消息内容后可签名
+- **位置**: `src/App.tsx` Line ~2087
+
+#### 9. 扫描已签名交易 📡
+- **新增**: 发送对话框可扫描已签名交易
+- **实现**:
+  - 扫描冷钱包生成的 SIGNED_TX 二维码
+  - 自动调用 `broadcastTransaction` 广播
+  - 显示广播结果和 TXID
+- **位置**: `src/App.tsx` Line ~1980
+
+#### 10. OCR 文字识别（开发中）🚧
+- **计划**: 集成 Tesseract.js
+- **功能**: 
+  - 调用摄像头拍照
+  - OCR 识别图片中的文字
+  - 填充到签名消息框
+  - 然后进行签名
+- **状态**: UI 按钮已添加，OCR 引擎待集成
+
+### 技术改进
+
+#### 1. 钱包类型验证
+```typescript
+// 观察钱包地址验证
+if (importChain === ChainType.BTC) {
+  if (!address.startsWith('bc1') && !address.startsWith('1') && !address.startsWith('3')) {
+    alert('❌ 不是有效的 BTC 地址格式');
+    return;
+  }
+} else {
+  if (!address.startsWith('0x') || address.length !== 42) {
+    alert('❌ 不是有效的 ETH 地址格式');
+    return;
+  }
+}
+```
+
+#### 2. 钱包模式切换逻辑
+```typescript
+// 切换为观察钱包（不可逆）
+const updatedWallets = wallets.map(w => 
+  w.id === selectedWallet.id 
+    ? { 
+        ...w, 
+        type: WalletType.WATCH_ONLY, 
+        privateKey: undefined,
+        mnemonic: undefined,
+        publicKey: undefined
+      }
+    : w
+);
+```
+
+#### 3. 按钮状态控制
+```typescript
+// 观察钱包禁用发送按钮
+<button 
+  disabled={selectedWallet?.type === WalletType.WATCH_ONLY}
+  className={selectedWallet?.type === WalletType.WATCH_ONLY 
+    ? 'opacity-50 cursor-not-allowed' 
+    : ''
+  }
+>
+  发送 {selectedWallet?.type === WalletType.WATCH_ONLY && ' 🔒'}
+</button>
+```
+
+### UI 改进
+
+1. **导入对话框**
+   - 3 列布局：热钱包 | 冷钱包 | 观察钱包
+   - 观察钱包显示专属提示
+   - 地址输入框支持扫描二维码
+
+2. **设置对话框**
+   - 新增"钱包模式切换"选项
+   - 3 个按钮切换不同模式
+   - 显示当前模式图标和警告
+
+3. **签名对话框**
+   - 添加扫描按钮（蓝色相机图标）
+   - 添加 OCR 按钮（绿色相机图标）
+   - 提示可使用两种方式输入
+
+4. **发送对话框**
+   - 添加"扫描签名结果"按钮
+   - 自动识别并广播已签名交易
+   - 显示广播状态
+
+### Git 提交记录
+
+```bash
+# 观察钱包和模式切换
+commit xxxxxx - feat: 实现观察钱包和钱包模式切换功能
+
+# 签名功能完善
+commit xxxxxx - feat: 添加扫描未签名/已签名交易功能
+
+# OCR 准备
+commit xxxxxx - feat: 添加 OCR 文字识别按钮（待集成 Tesseract.js）
+```
 
 ### 技术栈
 
