@@ -613,19 +613,34 @@ function App() {
       if (inputVideoRef.current) {
         inputVideoRef.current.srcObject = stream;
         
-        // 等待视频加载完成
-        inputVideoRef.current.onloadedmetadata = () => {
-          console.log('📹 视频元数据已加载');
-          inputVideoRef.current?.play().then(() => {
-            console.log('▶️ 视频开始播放');
-            // 开始扫描循环
-            inputScanIntervalRef.current = window.setInterval(scanInputFrame, 100);
-            console.log('🔄 扫描循环已启动');
-          }).catch(err => {
-            console.error('❌ 视频播放失败:', err);
-            alert('视频播放失败: ' + err.message);
+        // 尝试立即播放
+        try {
+          await inputVideoRef.current.play();
+          console.log('▶️ 视频开始播放');
+          
+          // 等待视频真正准备好
+          await new Promise((resolve) => {
+            const checkReady = () => {
+              if (inputVideoRef.current && inputVideoRef.current.readyState >= 2) {
+                console.log('📹 视频已准备就绪 (readyState=' + inputVideoRef.current.readyState + ')');
+                resolve(true);
+              } else {
+                setTimeout(checkReady, 100);
+              }
+            };
+            checkReady();
           });
-        };
+          
+          // 开始扫描循环
+          inputScanIntervalRef.current = window.setInterval(() => {
+            scanInputFrame();
+          }, 100);
+          console.log('🔄 扫描循环已启动');
+          
+        } catch (playErr) {
+          console.error('❌ 视频播放失败:', playErr);
+          alert('视频播放失败: ' + (playErr as Error).message);
+        }
       }
     } catch (error) {
       console.error('❌ 无法访问摄像头:', error);
