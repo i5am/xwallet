@@ -907,17 +907,54 @@ function App() {
 
       console.log('📸 已拍照，开始 OCR 识别...');
 
-      // OCR 识别
+      // 检查是否支持原生 OCR
+      // @ts-ignore - 检查实验性 API
+      if ('TextDetector' in window) {
+        try {
+          // @ts-ignore
+          const textDetector = new TextDetector();
+          const texts = await textDetector.detect(canvas);
+          
+          if (texts && texts.length > 0) {
+            const recognizedText = texts.map((t: any) => t.rawValue).join('\n');
+            console.log('✅ 原生 OCR 识别完成:', recognizedText);
+            
+            if (ocrCallback) {
+              ocrCallback(recognizedText);
+            }
+            closeOCR();
+            alert(`✅ 识别成功！\n\n识别到 ${recognizedText.length} 个字符`);
+            return;
+          }
+        } catch (e) {
+          console.warn('原生 OCR 不可用，尝试 Tesseract.js');
+        }
+      }
+
+      // 降级到 Tesseract.js
+      setOCRProgress(10);
+      
+      // 转换为 Blob
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((b) => resolve(b!), 'image/png');
+      });
+
+      console.log('📊 使用 Tesseract.js 识别...');
+      
       const result = await Tesseract.recognize(
-        canvas,
+        blob,
         'eng+chi_sim', // 英文 + 简体中文
         {
           logger: (m) => {
             if (m.status === 'recognizing text') {
-              setOCRProgress(Math.round(m.progress * 100));
+              setOCRProgress(Math.round(10 + m.progress * 90));
               console.log(`📊 OCR 进度: ${Math.round(m.progress * 100)}%`);
             }
-          }
+          },
+          // 添加 CORS 配置
+          corePath: 'https://unpkg.com/tesseract.js-core@v4.0.2',
+          workerPath: 'https://unpkg.com/tesseract.js@v4.0.2/dist/worker.min.js',
+          langPath: 'https://tessdata.projectnaptha.com/4.0.0',
         }
       );
 
@@ -925,7 +962,7 @@ function App() {
       console.log('✅ OCR 识别完成:', text);
 
       if (!text) {
-        alert('未识别到文字，请重新拍摄');
+        alert('❌ 未识别到文字\n\n建议：\n1. 确保文字清晰\n2. 光线充足\n3. 文字居中对齐\n4. 避免反光');
         setIsOCRProcessing(false);
         return;
       }
@@ -940,7 +977,20 @@ function App() {
       alert(`✅ 识别成功！\n\n识别到 ${text.length} 个字符`);
     } catch (error) {
       console.error('❌ OCR 识别失败:', error);
-      alert('OCR 识别失败: ' + (error as Error).message);
+      
+      // 提供更详细的错误信息
+      let errorMsg = 'OCR 识别失败';
+      if (error instanceof Error) {
+        if (error.message.includes('insecure')) {
+          errorMsg = '❌ OCR 识别失败：安全限制\n\n解决方案：\n1. 使用 HTTPS 访问\n2. 或手动输入文字';
+        } else if (error.message.includes('CORS')) {
+          errorMsg = '❌ OCR 识别失败：跨域限制\n\n请手动输入文字';
+        } else {
+          errorMsg = `❌ OCR 识别失败：${error.message}\n\n请手动输入文字`;
+        }
+      }
+      
+      alert(errorMsg);
       setIsOCRProcessing(false);
     }
   };
