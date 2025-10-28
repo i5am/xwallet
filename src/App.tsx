@@ -85,6 +85,7 @@ function App() {
   const inputVideoRef = useRef<HTMLVideoElement>(null);
   const inputCanvasRef = useRef<HTMLCanvasElement>(null);
   const inputScanIntervalRef = useRef<number | null>(null);
+  const inputCallbackRef = useRef<((value: string) => void) | null>(null);
 
   // 组件加载时从本地存储加载钱包
   useEffect(() => {
@@ -600,6 +601,13 @@ function App() {
   const startInputScan = async () => {
     try {
       console.log('🎥 开始请求摄像头权限...');
+      
+      // 检查是否在支持的环境中
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('您的浏览器不支持摄像头功能。请使用现代浏览器（Chrome、Safari、Firefox）或在真机上测试。');
+        return;
+      }
+      
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: 'environment',
@@ -609,6 +617,10 @@ function App() {
       });
       
       console.log('✅ 摄像头权限已授予');
+      console.log('📹 视频流信息:', {
+        tracks: stream.getVideoTracks().length,
+        settings: stream.getVideoTracks()[0]?.getSettings()
+      });
       
       if (inputVideoRef.current) {
         inputVideoRef.current.srcObject = stream;
@@ -623,6 +635,10 @@ function App() {
             const checkReady = () => {
               if (inputVideoRef.current && inputVideoRef.current.readyState >= 2) {
                 console.log('📹 视频已准备就绪 (readyState=' + inputVideoRef.current.readyState + ')');
+                console.log('📐 视频尺寸:', {
+                  width: inputVideoRef.current.videoWidth,
+                  height: inputVideoRef.current.videoHeight
+                });
                 resolve(true);
               } else {
                 setTimeout(checkReady, 100);
@@ -644,7 +660,14 @@ function App() {
       }
     } catch (error) {
       console.error('❌ 无法访问摄像头:', error);
-      alert('无法访问摄像头，请检查权限设置\n\n错误详情: ' + (error as Error).message);
+      const err = error as Error;
+      if (err.name === 'NotAllowedError') {
+        alert('摄像头权限被拒绝。请在浏览器设置中允许访问摄像头。');
+      } else if (err.name === 'NotFoundError') {
+        alert('未找到摄像头设备。请确保设备有摄像头。');
+      } else {
+        alert('无法访问摄像头\n\n错误详情: ' + err.message + '\n\n建议：\n1. 确保使用 HTTPS 或 localhost\n2. 检查浏览器摄像头权限\n3. 尝试在真机上测试');
+      }
     }
   };
 
@@ -682,6 +705,14 @@ function App() {
       return; // 视频尚未准备好
     }
     
+    // 每100次扫描输出一次状态（避免刷屏）
+    if (Math.random() < 0.01) {
+      console.log('🔍 正在扫描...', {
+        videoSize: `${video.videoWidth}x${video.videoHeight}`,
+        hasCallback: !!scanInputCallback
+      });
+    }
+    
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -689,44 +720,64 @@ function App() {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height);
     
-    if (code && scanInputCallback) {
-      console.log('✅ 扫描到二维码:', code.data);
-      stopInputScan();
+    if (code) {
+      console.log('🎯 检测到二维码!', {
+        data: code.data.substring(0, 50),
+        hasCallback: !!inputCallbackRef.current
+      });
       
-      // 尝试解析数据
-      let value = code.data;
-      try {
-        const parsed = ProtocolUtils.parseMessage(code.data);
-        if (parsed && parsed.data) {
-          // 根据不同类型提取数据
-          if (parsed.data.address) {
-            value = parsed.data.address;
-          } else if (parsed.data.privateKey) {
-            value = parsed.data.privateKey;
-          } else if (parsed.data.mnemonic) {
-            value = parsed.data.mnemonic;
-          } else if (typeof parsed.data === 'string') {
-            value = parsed.data;
+      if (inputCallbackRef.current) {
+        console.log('✅ 扫描到二维码，准备处理:', code.data);
+        stopInputScan();
+        
+        // 尝试解析数据
+        let value = code.data;
+        try {
+          const parsed = ProtocolUtils.parseMessage(code.data);
+          if (parsed && parsed.data) {
+            // 根据不同类型提取数据
+            if (parsed.data.address) {
+              value = parsed.data.address;
+            } else if (parsed.data.privateKey) {
+              value = parsed.data.privateKey;
+            } else if (parsed.data.mnemonic) {
+              value = parsed.data.mnemonic;
+            } else if (typeof parsed.data === 'string') {
+              value = parsed.data;
+            }
           }
+        } catch (e) {
+          // 使用原始数据
+          console.log('ℹ️ 使用原始二维码数据');
         }
-      } catch (e) {
-        // 使用原始数据
-        console.log('ℹ️ 使用原始二维码数据');
+        
+        console.log('📝 填充值:', value);
+        inputCallbackRef.current(value);
+        setShowInputScanDialog(false);
+        setScanInputCallback(null);
+        inputCallbackRef.current = null;
+      } else {
+        console.warn('⚠️ 检测到二维码但 callback 为空!');
       }
-      
-      console.log('📝 填充值:', value);
-      scanInputCallback(value);
-      setShowInputScanDialog(false);
-      setScanInputCallback(null);
     }
   };
 
   // 打开输入扫描对话框
   const openInputScan = (title: string, callback: (value: string) => void) => {
+    console.log('🚀 打开输入扫描对话框:', title);
     setScanInputTitle(title);
-    // 修复: 使用双层箭头函数正确保存 callback
-    setScanInputCallback(() => (value: string) => callback(value));
+    
+    // 使用 ref 立即保存 callback，避免 state 更新延迟
+    inputCallbackRef.current = (value: string) => {
+      console.log('📞 Callback 被调用，值:', value);
+      callback(value);
+    };
+    
+    // 仍然保持 state 用于 UI 显示兼容性
+    setScanInputCallback(() => inputCallbackRef.current);
     setShowInputScanDialog(true);
+    
+    console.log('⏱️ 300ms 后启动摄像头，callback 已保存到 ref');
     setTimeout(() => startInputScan(), 300);
   };
 
@@ -735,6 +786,7 @@ function App() {
     stopInputScan();
     setShowInputScanDialog(false);
     setScanInputCallback(null);
+    inputCallbackRef.current = null;
   };
 
   // 生成未签名交易
