@@ -156,7 +156,7 @@ commit 67a1cd4 - fix: 修复扫描 callback 未保存的问题
 - [x] 钱包模式切换（在设置中切换热钱包/冷钱包/观察钱包）
 - [x] 签名功能扫描未签名交易二维码
 - [x] 扫描已签名交易二维码并广播
-- [ ] OCR 文字识别功能（调用摄像头识别文字）
+- [x] OCR 文字识别功能（调用摄像头识别文字）✅ **已完成**
 - [ ] 对接实际的区块链广播 API
 - [ ] 实现真实的交易历史查询
 - [ ] 添加交易状态实时更新
@@ -192,10 +192,10 @@ commit 67a1cd4 - fix: 修复扫描 callback 未保存的问题
 #### 8. 签名功能完善 ✍️
 - **新增**: 扫描未签名交易二维码
 - **实现**:
-  - 签名对话框添加扫描按钮
+  - 签名对话框添加扫描按钮（蓝色）
   - 自动识别 UNSIGNED_TX 类型
   - 填充消息内容后可签名
-- **位置**: `src/App.tsx` Line ~2087
+- **位置**: `src/App.tsx` Line ~2196
 
 #### 9. 扫描已签名交易 📡
 - **新增**: 发送对话框可扫描已签名交易
@@ -203,16 +203,41 @@ commit 67a1cd4 - fix: 修复扫描 callback 未保存的问题
   - 扫描冷钱包生成的 SIGNED_TX 二维码
   - 自动调用 `broadcastTransaction` 广播
   - 显示广播结果和 TXID
-- **位置**: `src/App.tsx` Line ~1980
+- **位置**: `src/App.tsx` Line ~2082
 
-#### 10. OCR 文字识别（开发中）🚧
-- **计划**: 集成 Tesseract.js
-- **功能**: 
-  - 调用摄像头拍照
-  - OCR 识别图片中的文字
-  - 填充到签名消息框
-  - 然后进行签名
-- **状态**: UI 按钮已添加，OCR 引擎待集成
+#### 10. OCR 文字识别 ✅ �
+- **功能**: 调用摄像头进行 OCR 文字识别
+- **技术**: Tesseract.js OCR 引擎
+- **支持语言**: 英文 + 简体中文
+- **实现**:
+  ```typescript
+  const captureAndRecognize = async () => {
+    // 1. 拍照
+    ctx.drawImage(video, 0, 0);
+    
+    // 2. OCR 识别
+    const result = await Tesseract.recognize(
+      canvas,
+      'eng+chi_sim',  // 英文+简体中文
+      {
+        logger: (m) => {
+          if (m.status === 'recognizing text') {
+            setOCRProgress(Math.round(m.progress * 100));
+          }
+        }
+      }
+    );
+    
+    // 3. 填充结果
+    callback(result.data.text.trim());
+  }
+  ```
+- **UI 特性**:
+  - 实时显示识别进度（0-100%）
+  - 拍照预览
+  - 识别中禁用操作
+- **位置**: `src/App.tsx` Line ~851-945
+- **UI 对话框**: Line ~3849-3927
 
 ### 技术改进
 
@@ -274,36 +299,48 @@ const updatedWallets = wallets.map(w =>
    - 3 个按钮切换不同模式
    - 显示当前模式图标和警告
 
-3. **签名对话框**
-   - 添加扫描按钮（蓝色相机图标）
-   - 添加 OCR 按钮（绿色相机图标）
+3. **签名对话框** ✅ 完整功能
+   - 添加扫描按钮（蓝色相机图标 📷）
+   - 添加 OCR 按钮（绿色相机图标 📷）
    - 提示可使用两种方式输入
+   - OCR 识别进度条显示
 
 4. **发送对话框**
    - 添加"扫描签名结果"按钮
    - 自动识别并广播已签名交易
    - 显示广播状态
 
+5. **首页优化**
+   - ❌ 移除"扫描未签名交易"按钮
+   - ❌ 移除"扫描已签名交易"按钮
+   - ✅ 保留"查看交易历史"按钮
+   - 功能位置更合理，避免混淆
+
+6. **OCR 对话框** 🆕
+   - 实时摄像头预览
+   - 拍照按钮
+   - 进度条显示（0-100%）
+   - 识别状态提示
+   - 结果自动填充
+
 ### Git 提交记录
 
 ```bash
+# 主要功能实现
+commit ec07a60 - feat: 实现完整离线交易流程和助记词安全显示
+
+# 扫描功能修复
+commit fbf9710 - fix: 改进输入扫描功能的调试和错误处理
+commit c08e0fc - fix: 修复视频扫描循环未启动的问题
+commit 67a1cd4 - fix: 修复扫描 callback 未保存的问题
+
 # 观察钱包和模式切换
-commit xxxxxx - feat: 实现观察钱包和钱包模式切换功能
+commit d454a12 - feat: 实现观察钱包、钱包模式切换和签名扫描功能
+commit c22d934 - docs: 添加观察钱包和签名功能使用指南
 
-# 签名功能完善
-commit xxxxxx - feat: 添加扫描未签名/已签名交易功能
-
-# OCR 准备
-commit xxxxxx - feat: 添加 OCR 文字识别按钮（待集成 Tesseract.js）
+# OCR 功能实现
+commit 0eeb9bf - feat: 实现OCR文字识别功能并优化扫描按钮位置 ✨
 ```
-
-### 技术栈
-
-- React 18 + TypeScript
-- Vite 5.4.21
-- jsQR (二维码识别)
-- QRCode (二维码生成)
-- BTCAdapter / ETHAdapter (区块链适配器)
 
 ### 调试技巧
 
