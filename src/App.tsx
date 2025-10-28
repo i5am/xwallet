@@ -12,7 +12,7 @@ import { formatAddress } from './utils';
 import { ProtocolUtils } from './utils/protocol';
 import { WalletStorage } from './services/storage/WalletStorage';
 import { PasswordService } from './services/storage/PasswordService';
-import { Wallet as WalletIcon, Plus, ArrowUpRight, ArrowDownLeft, Settings, Zap, X, Camera, QrCode as QrCodeIcon, Lock, Eye, EyeOff } from 'lucide-react';
+import { Wallet as WalletIcon, Plus, ArrowUpRight, ArrowDownLeft, Settings, Zap, X, Camera, QrCode as QrCodeIcon, Lock, Eye, EyeOff, Trash2 } from 'lucide-react';
 
 function App() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -40,6 +40,8 @@ function App() {
   const [importAddress, setImportAddress] = useState<string>('');
   const [importChain, setImportChain] = useState<ChainType>(ChainType.BTC);
   const [importWalletType, setImportWalletType] = useState<WalletType>(WalletType.HOT);
+  const [isConvertingWatchOnly, setIsConvertingWatchOnly] = useState(false); // 是否正在转换观测钱包
+  const [convertingWalletId, setConvertingWalletId] = useState<string | null>(null); // 要转换的观测钱包ID
   const [scanResult, setScanResult] = useState<any>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanDataType, setScanDataType] = useState<'message' | 'transaction' | 'authorization' | 'raw' | null>(null);
@@ -326,6 +328,62 @@ function App() {
           address = ethAdapter.addressFromPrivateKey(privateKey);
           publicKey = privateKey.substring(0, 130);
         }
+      }
+
+      // 如果是转换观测钱包模式
+      if (isConvertingWatchOnly && convertingWalletId) {
+        const walletToConvert = wallets.find(w => w.id === convertingWalletId);
+        if (!walletToConvert) {
+          alert('❌ 找不到要转换的钱包');
+          return;
+        }
+
+        // 验证地址是否匹配
+        if (address.toLowerCase() !== walletToConvert.address.toLowerCase()) {
+          alert('❌ 地址不匹配\n\n您输入的助记词/私钥生成的地址与观测钱包的地址不一致。\n\n请确保使用正确的助记词或私钥。');
+          return;
+        }
+
+        // 更新观测钱包为热钱包或冷钱包
+        const updatedWallets = wallets.map(w => 
+          w.id === convertingWalletId
+            ? {
+                ...w,
+                type: importWalletType,
+                name: w.name.replace('观察', importWalletType === WalletType.HOT ? '热' : '冷'),
+                mnemonic,
+                privateKey,
+                publicKey,
+                isOnline: importWalletType === WalletType.HOT,
+                updatedAt: Date.now()
+              }
+            : w
+        );
+        
+        setWallets(updatedWallets);
+        WalletStorage.saveWallets(updatedWallets);
+        
+        // 更新当前选中的钱包
+        const updatedWallet = updatedWallets.find(w => w.id === convertingWalletId)!;
+        setSelectedWallet(updatedWallet);
+        
+        setShowImportDialog(false);
+        setImportMnemonic('');
+        setImportPrivateKey('');
+        setImportAddress('');
+        setIsConvertingWatchOnly(false);
+        setConvertingWalletId(null);
+        
+        alert(`✅ 观测钱包已成功转换为${importWalletType === WalletType.HOT ? '热' : '冷'}钱包！\n\n现在可以使用此钱包进行签名操作。`);
+        
+        // 如果是热钱包，自动刷新余额
+        if (importWalletType === WalletType.HOT) {
+          setTimeout(() => {
+            refreshBalance(updatedWallet);
+          }, 500);
+        }
+        
+        return;
       }
 
       // 钱包类型名称
@@ -1697,6 +1755,34 @@ function App() {
                           >
                             <Lock className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                           </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (wallets.length <= 1) {
+                                alert('❌ 无法删除\n\n至少需要保留一个钱包');
+                                return;
+                              }
+                              if (confirm(`⚠️ 确认删除钱包？\n\n钱包：${wallet.name}\n地址：${formatAddress(wallet.address)}\n\n删除后无法恢复！请确保已备份助记词或私钥。\n\n确定要删除吗？`)) {
+                                // 删除钱包
+                                const updatedWallets = wallets.filter(w => w.id !== wallet.id);
+                                setWallets(updatedWallets);
+                                WalletStorage.saveWallets(updatedWallets);
+                                
+                                // 如果删除的是当前选中的钱包，选择第一个钱包
+                                if (selectedWallet?.id === wallet.id) {
+                                  const newSelected = updatedWallets[0];
+                                  setSelectedWallet(newSelected);
+                                  refreshBalance(newSelected);
+                                }
+                                
+                                alert('✅ 钱包已删除');
+                              }
+                            }}
+                            className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
+                            title="删除钱包"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -2777,7 +2863,16 @@ function App() {
                               return;
                             }
                             if (!selectedWallet.privateKey) {
-                              alert('❌ 观测钱包无法切换为热钱包\n\n观测钱包不包含私钥，无法进行签名操作。\n\n建议：重新导入带私钥的钱包');
+                              // 观测钱包需要重新导入私钥
+                              if (confirm('❌ 观测钱包无法直接切换为热钱包\n\n观测钱包不包含私钥，需要重新导入私钥才能切换。\n\n是否现在导入私钥？')) {
+                                setShowSettingsDialog(false);
+                                setIsConvertingWatchOnly(true);
+                                setConvertingWalletId(selectedWallet.id);
+                                setImportChain(selectedWallet.chain);
+                                setImportWalletType(WalletType.HOT);
+                                setShowImportDialog(true);
+                                alert('💡 提示\n\n请输入您的助记词或私钥来导入热钱包。导入后此地址的观测钱包将被替换为热钱包。');
+                              }
                               return;
                             }
                             if (confirm('🔥 切换为热钱包模式？\n\n钱包将自动连接网络并同步余额，支持发送、签名、AI支付等所有功能。\n\n确定要继续吗？')) {
@@ -2829,7 +2924,16 @@ function App() {
                               return;
                             }
                             if (!selectedWallet.privateKey) {
-                              alert('❌ 观测钱包无法切换为冷钱包\n\n观测钱包不包含私钥，无法进行签名操作。\n\n建议：重新导入带私钥的钱包');
+                              // 观测钱包需要重新导入私钥
+                              if (confirm('❌ 观测钱包无法直接切换为冷钱包\n\n观测钱包不包含私钥，需要重新导入私钥才能切换。\n\n是否现在导入私钥？')) {
+                                setShowSettingsDialog(false);
+                                setIsConvertingWatchOnly(true);
+                                setConvertingWalletId(selectedWallet.id);
+                                setImportChain(selectedWallet.chain);
+                                setImportWalletType(WalletType.COLD);
+                                setShowImportDialog(true);
+                                alert('💡 提示\n\n请输入您的助记词或私钥来导入冷钱包。导入后此地址的观测钱包将被替换为冷钱包。');
+                              }
                               return;
                             }
                             if (confirm('❄️ 切换为冷钱包模式？\n\n钱包将断开网络连接，仅支持离线签名功能。需要配合观测钱包使用。\n\n建议：将此设备断网并作为专用冷钱包。\n\n确定要继续吗？')) {
