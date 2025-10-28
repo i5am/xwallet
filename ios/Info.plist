@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 应用信息 -->
+    <key>CFBundleDevelopmentRegion</key>
+    <string>zh_CN</string>
+    
+    <key>CFBundleDisplayName</key>
+    <string>WDK钱包</string>
+    
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    
+    <!-- 支持的设备方向 -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    
+    <!-- iPad 支持的方向 -->
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    
+    <!-- 最低系统版本 -->
+    <key>MinimumOSVersion</key>
+    <string>13.0</string>
+    
+    <!-- 状态栏样式 -->
+    <key>UIStatusBarStyle</key>
+    <string>UIStatusBarStyleLightContent</string>
+    
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <true/>
+    
+    <!-- 启动画面 -->
+    <key>UILaunchStoryboardName</key>
+    <string>LaunchScreen</string>
+    
+    <!-- 权限说明 -->
+    
+    <!-- 相机权限 - OCR 文字识别需要 -->
+    <key>NSCameraUsageDescription</key>
+    <string>钱包应用需要使用相机进行 OCR 文字识别和二维码扫描</string>
+    
+    <!-- 相册权限（可选） -->
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>钱包应用需要访问相册以选择图片进行 OCR 识别</string>
+    
+    <!-- 麦克风权限（如需语音功能） -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>钱包应用需要使用麦克风</string>
+    
+    <!-- 网络配置 -->
+    
+    <!-- 允许 HTTP 连接（开发环境） -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <!-- 生产环境建议移除此配置，只使用 HTTPS -->
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+        
+        <!-- 或者只允许特定域名的 HTTP -->
+        <!--
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>localhost</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+            </dict>
+        </dict>
+        -->
+    </dict>
+    
+    <!-- 应用能力 -->
+    
+    <!-- 后台模式（如需要） -->
+    <!--
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>fetch</string>
+        <string>remote-notification</string>
+    </array>
+    -->
+    
+    <!-- 场景配置（iOS 13+） -->
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+        <key>UISceneConfigurations</key>
+        <dict>
+            <key>UIWindowSceneSessionRoleApplication</key>
+            <array>
+                <dict>
+                    <key>UISceneConfigurationName</key>
+                    <string>Default Configuration</string>
+                    <key>UISceneDelegateClassName</key>
+                    <string>SceneDelegate</string>
+                </dict>
+            </array>
+        </dict>
+    </dict>
+    
+    <!-- 支持的文件类型（如需要） -->
+    <!--
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>JSON File</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.json</string>
+            </array>
+        </dict>
+    </array>
+    -->
+    
+    <!-- URL Schemes（如需要深链接） -->
+    <!--
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>CFBundleURLName</key>
+            <string>com.wdk.wallet</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>wdk</string>
+            </array>
+        </dict>
+    </array>
+    -->
+    
+    <!-- 隐私配置 -->
+    
+    <!-- 禁用 iTunes 文件共享 -->
+    <key>UIFileSharingEnabled</key>
+    <false/>
+    
+    <!-- 支持通用链接（可选） -->
+    <!--
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>applinks:your-domain.com</string>
+    </array>
+    -->
+</dict>
+</plist>
