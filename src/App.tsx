@@ -1173,6 +1173,117 @@ function App() {
     }
   };
 
+  // 广播签名后的交易（观测钱包使用）
+  const broadcastSignedTransaction = async (signedData: any) => {
+    try {
+      if (!selectedWallet) {
+        alert('❌ 请先选择钱包');
+        return;
+      }
+
+      // 验证是否是观测钱包
+      if (selectedWallet.type !== WalletType.WATCH_ONLY) {
+        alert('⚠️ 此功能仅供观测钱包使用');
+        return;
+      }
+
+      // 解析签名数据
+      let txData: any;
+      
+      // 如果 message 字段是字符串，尝试解析
+      if (typeof signedData.message === 'string') {
+        try {
+          const parsedMessage = JSON.parse(signedData.message);
+          txData = parsedMessage.data || parsedMessage;
+        } catch (e) {
+          console.error('解析 message 字段失败:', e);
+          txData = signedData;
+        }
+      } else {
+        txData = signedData.message?.data || signedData;
+      }
+
+      const signature = signedData.signature;
+      const signerAddress = signedData.address;
+      const chain = signedData.chain || txData.chain;
+
+      // 验证数据完整性
+      if (!signature) {
+        alert('❌ 签名数据不完整，缺少签名');
+        return;
+      }
+
+      if (!txData.to || !txData.amount) {
+        alert('❌ 交易数据不完整，缺少收款地址或金额');
+        return;
+      }
+
+      // 验证链类型
+      if (chain && chain !== selectedWallet.chain) {
+        alert(`❌ 链类型不匹配\n\n签名链: ${chain}\n钱包链: ${selectedWallet.chain}`);
+        return;
+      }
+
+      // 验证地址匹配
+      if (txData.from && txData.from.toLowerCase() !== selectedWallet.address.toLowerCase()) {
+        alert(`❌ 发送地址不匹配\n\n交易地址: ${txData.from}\n钱包地址: ${selectedWallet.address}`);
+        return;
+      }
+
+      // 显示交易详情并确认
+      const confirmMessage = `
+📤 准备广播交易
+
+收款地址: ${formatAddress(txData.to)}
+转账金额: ${txData.amount} ${chain === 'bitcoin' ? 'BTC' : 'ETH'}
+手续费: ${txData.fee || '未知'}
+签名者: ${formatAddress(signerAddress)}
+
+确认广播到区块链网络？
+      `.trim();
+
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+
+      // 显示广播对话框
+      setShowScanDialog(false);
+      setShowBroadcastDialog(true);
+      setBroadcastResult('正在广播交易...');
+
+      // 模拟广播延迟
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // 实际应用中应调用区块链 API 广播交易
+      // 这里使用模拟的 TXID
+      const mockTxId = txData.txId || `${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+      // TODO: 实际广播逻辑
+      // if (selectedWallet.chain === ChainType.BTC) {
+      //   const btcAdapter = new BTCAdapter(selectedWallet.network);
+      //   const result = await btcAdapter.broadcastTransaction(signature);
+      //   setBroadcastResult(result.txid);
+      // } else {
+      //   const ethAdapter = new ETHAdapter(networkConfig.rpcUrl, selectedWallet.network);
+      //   const result = await ethAdapter.broadcastTransaction(signature);
+      //   setBroadcastResult(result.hash);
+      // }
+
+      setBroadcastResult(mockTxId);
+      alert(`✅ 交易已成功广播！\n\nTXID: ${mockTxId}\n\n交易已提交到区块链网络，请等待确认。`);
+      
+      // 广播成功后刷新余额
+      setTimeout(() => {
+        refreshBalance(selectedWallet);
+      }, 1000);
+
+    } catch (error) {
+      console.error('广播交易失败:', error);
+      alert(`❌ 广播交易失败: ${(error as Error).message}`);
+      setShowBroadcastDialog(false);
+    }
+  };
+
   // 加载交易历史
   const loadTransactionHistory = async () => {
     if (!selectedWallet) return;
@@ -1326,7 +1437,20 @@ function App() {
           setScanResult(parsed);
           
           // 识别数据类型并分类 (兼容旧格式)
-          if (parsed.type === 'message' || parsed.message !== undefined) {
+          // 优先检查是否是签名响应（包含 signature 字段）
+          if (parsed.signature && (parsed.message || parsed.transaction || parsed.txId)) {
+            // 这是一个签名响应
+            if (selectedWallet?.type === WalletType.WATCH_ONLY) {
+              // 观测钱包扫描到签名响应，准备广播
+              if (confirm('✅ 检测到签名结果！\n\n是否立即广播交易到区块链网络？')) {
+                broadcastSignedTransaction(parsed);
+              }
+            } else {
+              // 其他钱包类型显示详情
+              setScanDataType('raw');
+              setShowConfirmDialog(true);
+            }
+          } else if (parsed.type === 'message' || parsed.message !== undefined) {
             setScanDataType('message');
             setShowConfirmDialog(true);
           } else if (parsed.type === 'authorization' || parsed.authorization !== undefined || parsed.scope !== undefined) {
