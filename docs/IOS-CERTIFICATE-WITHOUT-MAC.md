@@ -228,6 +228,7 @@ com.ex1.x1wallet (explicit)
 12. UDID 格式: 00008030-XXXXXXXXXXXX (40位字符)
 13. 复制这个 UDID (长按选择,复制)
 14. 可以通过 AirDrop/邮件发送到电脑
+00008140-001028E41180401C
 
 # 方法 B: 使用 Finder (需要 Mac)
 1. iPhone 用数据线连接到 Mac
@@ -245,7 +246,7 @@ com.ex1.x1wallet (explicit)
 5. 会变成 UDID
 6. 右键 → 复制
 ```
-
+00008140-001028E41180401C
 **步骤 6.2: 在 Apple Developer Portal 注册设备**
 
 ```bash

@@ -1335,6 +1335,73 @@ function App() {
                       扫描二维码
                     </button>
                   </div>
+                    {/* 新增功能入口按钮 */}
+                    <div className="grid grid-cols-1 gap-3 mt-4">
+                      <button
+                        onClick={() => {
+                          if (!selectedWallet) {
+                            alert('⚠️ 请先创建或选择一个钱包');
+                            return;
+                          }
+                          openInputScan('扫描未签名交易', (data) => {
+                            try {
+                              const msg = ProtocolUtils.parseMessage(data);
+                              if (msg && (msg.type === 'SIGN_TRANSACTION_REQUEST' || msg.type === 'UNSIGNED_TX')) {
+                                signTransaction && signTransaction(msg);
+                              } else {
+                                alert('二维码内容不是未签名交易');
+                              }
+                            } catch (e) {
+                              alert('二维码解析失败');
+                            }
+                          });
+                        }}
+                        className="btn-secondary flex items-center justify-center gap-2"
+                      >
+                        <Camera className="w-5 h-5" />
+                        扫描未签名交易
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!selectedWallet) {
+                            alert('⚠️ 请先创建或选择一个钱包');
+                            return;
+                          }
+                          openInputScan('扫描已签名交易', (data) => {
+                            try {
+                              const msg = ProtocolUtils.parseMessage(data);
+                              if (msg && msg.type === 'SIGNED_TX') {
+                                if (window.confirm('检测到已签名交易，是否立即广播？')) {
+                                  broadcastTransaction && broadcastTransaction(msg);
+                                }
+                              } else {
+                                alert('二维码内容不是已签名交易');
+                              }
+                            } catch (e) {
+                              alert('二维码解析失败');
+                            }
+                          });
+                        }}
+                        className="btn-secondary flex items-center justify-center gap-2"
+                      >
+                        <Camera className="w-5 h-5" />
+                        扫描已签名交易
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!selectedWallet) {
+                            alert('⚠️ 请先创建或选择一个钱包');
+                            return;
+                          }
+                          loadTransactionHistory && loadTransactionHistory();
+                          setShowTransactionHistory && setShowTransactionHistory(true);
+                        }}
+                        className="btn-secondary flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        查看交易历史
+                      </button>
+                    </div>
                 </div>
 
                 {/* Address Card */}
@@ -1352,14 +1419,34 @@ function App() {
                       </div>
                     </div>
                     {selectedWallet.mnemonic && (
-                      <div>
-                        <label className="text-sm text-gray-600 dark:text-gray-400">
-                          助记词 (请妥善保管)
-                        </label>
-                        <div className="font-mono text-sm bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded mt-1 border border-yellow-300 dark:border-yellow-700">
-                          {selectedWallet.mnemonic}
-                        </div>
-                      </div>
+                      <>
+                        <button
+                          onClick={async () => {
+                            const pwd = prompt('请输入钱包密码以查看助记词');
+                            if (!pwd) return;
+                            const ok = await PasswordService.verifyPassword(pwd);
+                            if (ok) {
+                              setShowMnemonic(true);
+                              setTimeout(() => setShowMnemonic(false), 20000);
+                            } else {
+                              alert('密码错误');
+                            }
+                          }}
+                          className="btn-secondary mt-2"
+                        >
+                          查看助记词（需密码）
+                        </button>
+                        {showMnemonic && (
+                          <div className="mt-2">
+                            <label className="text-sm text-gray-600 dark:text-gray-400">
+                              助记词 (请妥善保管)
+                            </label>
+                            <div className="font-mono text-sm bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded mt-1 border border-yellow-300 dark:border-yellow-700">
+                              {selectedWallet.mnemonic}
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
