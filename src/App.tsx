@@ -599,20 +599,37 @@ function App() {
   // 启动输入扫描
   const startInputScan = async () => {
     try {
+      console.log('🎥 开始请求摄像头权限...');
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
       });
+      
+      console.log('✅ 摄像头权限已授予');
       
       if (inputVideoRef.current) {
         inputVideoRef.current.srcObject = stream;
-        await inputVideoRef.current.play();
         
-        // 开始扫描循环
-        inputScanIntervalRef.current = window.setInterval(scanInputFrame, 100);
+        // 等待视频加载完成
+        inputVideoRef.current.onloadedmetadata = () => {
+          console.log('📹 视频元数据已加载');
+          inputVideoRef.current?.play().then(() => {
+            console.log('▶️ 视频开始播放');
+            // 开始扫描循环
+            inputScanIntervalRef.current = window.setInterval(scanInputFrame, 100);
+            console.log('🔄 扫描循环已启动');
+          }).catch(err => {
+            console.error('❌ 视频播放失败:', err);
+            alert('视频播放失败: ' + err.message);
+          });
+        };
       }
     } catch (error) {
-      console.error('无法访问摄像头:', error);
-      alert('无法访问摄像头，请检查权限设置');
+      console.error('❌ 无法访问摄像头:', error);
+      alert('无法访问摄像头，请检查权限设置\n\n错误详情: ' + (error as Error).message);
     }
   };
 
@@ -632,13 +649,23 @@ function App() {
 
   // 扫描输入框二维码帧
   const scanInputFrame = () => {
-    if (!inputVideoRef.current || !inputCanvasRef.current) return;
+    if (!inputVideoRef.current || !inputCanvasRef.current) {
+      console.log('⚠️ 视频或画布引用不存在');
+      return;
+    }
     
     const video = inputVideoRef.current;
     const canvas = inputCanvasRef.current;
     const ctx = canvas.getContext('2d');
     
-    if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+    if (!ctx) {
+      console.log('⚠️ 无法获取画布上下文');
+      return;
+    }
+    
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+      return; // 视频尚未准备好
+    }
     
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -648,6 +675,7 @@ function App() {
     const code = jsQR(imageData.data, imageData.width, imageData.height);
     
     if (code && scanInputCallback) {
+      console.log('✅ 扫描到二维码:', code.data);
       stopInputScan();
       
       // 尝试解析数据
@@ -668,8 +696,10 @@ function App() {
         }
       } catch (e) {
         // 使用原始数据
+        console.log('ℹ️ 使用原始二维码数据');
       }
       
+      console.log('📝 填充值:', value);
       scanInputCallback(value);
       setShowInputScanDialog(false);
       setScanInputCallback(null);
