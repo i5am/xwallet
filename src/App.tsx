@@ -3,7 +3,6 @@ import { Wallet, WalletType, ChainType, NetworkType } from './types';
 import * as bip39 from 'bip39';
 import QRCode from 'qrcode';
 import jsQR from 'jsqr';
-import Tesseract from 'tesseract.js';
 import { BTCAdapter } from './services/blockchain/BTCAdapter-harmonyos';
 import { ETHAdapter } from './services/blockchain/ETHAdapter';
 import { FlightsparkAdapter } from './services/flightspark/FlightsparkAdapter';
