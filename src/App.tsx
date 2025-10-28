@@ -2725,13 +2725,22 @@ function App() {
                 {/* 钱包模式切换 */}
                 {selectedWallet && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      当前钱包模式
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                      <Settings className="w-4 h-4 inline mr-2" />
+                      钱包模式设置
                     </label>
-                    <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
-                          {selectedWallet.name}
+                    
+                    {/* 当前模式显示 */}
+                    <div className={`p-4 rounded-lg mb-4 ${
+                      selectedWallet.type === WalletType.HOT 
+                        ? 'bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 border border-orange-300 dark:border-orange-700'
+                        : selectedWallet.type === WalletType.COLD
+                        ? 'bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border border-blue-300 dark:border-blue-700'
+                        : 'bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-800 dark:to-slate-800 border border-gray-300 dark:border-gray-700'
+                    }`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                          当前模式
                         </span>
                         <span className="text-2xl">
                           {selectedWallet.type === WalletType.HOT && '🔥'}
@@ -2739,20 +2748,39 @@ function App() {
                           {selectedWallet.type === WalletType.WATCH_ONLY && '👁️'}
                         </span>
                       </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        <strong>
+                          {selectedWallet.type === WalletType.HOT && '热钱包模式'}
+                          {selectedWallet.type === WalletType.COLD && '冷钱包模式'}
+                          {selectedWallet.type === WalletType.WATCH_ONLY && '观测钱包模式'}
+                        </strong>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {selectedWallet.type === WalletType.HOT && '在线钱包，支持所有功能'}
+                        {selectedWallet.type === WalletType.COLD && '离线钱包，通过二维码签名'}
+                        {selectedWallet.type === WalletType.WATCH_ONLY && '只读钱包，无法签名交易'}
+                      </div>
+                    </div>
+                    
+                    {/* 模式切换按钮 */}
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                        💡 切换模式将改变钱包的功能和界面
+                      </p>
                       
-                      <div className="space-y-2">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">切换钱包模式:</p>
-                        <div className="grid grid-cols-3 gap-2">
-                          <button
-                            onClick={() => {
-                              if (selectedWallet.type === WalletType.HOT) {
-                                alert('✅ 当前已经是热钱包模式');
-                                return;
-                              }
-                              if (!selectedWallet.privateKey) {
-                                alert('❌ 观察钱包无法切换为热钱包\n\n观察钱包不包含私钥，无法进行签名操作。');
-                                return;
-                              }
+                      <div className="space-y-3">
+                        {/* 热钱包选项 */}
+                        <button
+                          onClick={() => {
+                            if (selectedWallet.type === WalletType.HOT) {
+                              alert('✅ 当前已经是热钱包模式');
+                              return;
+                            }
+                            if (!selectedWallet.privateKey) {
+                              alert('❌ 观测钱包无法切换为热钱包\n\n观测钱包不包含私钥，无法进行签名操作。\n\n建议：重新导入带私钥的钱包');
+                              return;
+                            }
+                            if (confirm('🔥 切换为热钱包模式？\n\n钱包将自动连接网络并同步余额，支持发送、签名、AI支付等所有功能。\n\n确定要继续吗？')) {
                               const updatedWallets = wallets.map(w => 
                                 w.id === selectedWallet.id 
                                   ? { ...w, type: WalletType.HOT, isOnline: true }
@@ -2761,26 +2789,50 @@ function App() {
                               setWallets(updatedWallets);
                               setSelectedWallet({ ...selectedWallet, type: WalletType.HOT, isOnline: true });
                               WalletStorage.saveWallets(updatedWallets);
-                              alert('✅ 已切换为热钱包模式\n\n钱包将自动同步余额');
-                            }}
-                            className={`p-2 text-sm rounded border transition-colors ${
-                              selectedWallet.type === WalletType.HOT
-                                ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300'
-                                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
-                          >
-                            🔥 热钱包
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (selectedWallet.type === WalletType.COLD) {
-                                alert('✅ 当前已经是冷钱包模式');
-                                return;
-                              }
-                              if (!selectedWallet.privateKey) {
-                                alert('❌ 观察钱包无法切换为冷钱包\n\n观察钱包不包含私钥，无法进行签名操作。');
-                                return;
-                              }
+                              alert('✅ 已切换为热钱包模式\n\n钱包将自动同步余额，现在可以使用所有功能');
+                              // 自动刷新余额
+                              setTimeout(() => {
+                                refreshBalance({ ...selectedWallet, type: WalletType.HOT, isOnline: true });
+                              }, 500);
+                            }
+                          }}
+                          className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                            selectedWallet.type === WalletType.HOT
+                              ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 shadow-lg'
+                              : 'border-gray-300 dark:border-gray-600 hover:bg-orange-50/50 dark:hover:bg-orange-900/10 hover:border-orange-400'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="text-2xl">🔥</span>
+                            <div className="flex-1">
+                              <div className="font-semibold text-gray-800 dark:text-white mb-1">
+                                热钱包
+                                {selectedWallet.type === WalletType.HOT && (
+                                  <span className="ml-2 text-xs bg-orange-500 text-white px-2 py-0.5 rounded">当前</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400 space-y-0.5">
+                                <p>✓ 在线钱包，自动同步余额</p>
+                                <p>✓ 支持发送、接收、签名</p>
+                                <p>✓ 支持 AI 支付功能</p>
+                                <p className="text-orange-600 dark:text-orange-400">⚠️ 需要网络连接</p>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                        
+                        {/* 冷钱包选项 */}
+                        <button
+                          onClick={() => {
+                            if (selectedWallet.type === WalletType.COLD) {
+                              alert('✅ 当前已经是冷钱包模式');
+                              return;
+                            }
+                            if (!selectedWallet.privateKey) {
+                              alert('❌ 观测钱包无法切换为冷钱包\n\n观测钱包不包含私钥，无法进行签名操作。\n\n建议：重新导入带私钥的钱包');
+                              return;
+                            }
+                            if (confirm('❄️ 切换为冷钱包模式？\n\n钱包将断开网络连接，仅支持离线签名功能。需要配合观测钱包使用。\n\n建议：将此设备断网并作为专用冷钱包。\n\n确定要继续吗？')) {
                               const updatedWallets = wallets.map(w => 
                                 w.id === selectedWallet.id 
                                   ? { ...w, type: WalletType.COLD, isOnline: false }
@@ -2789,24 +2841,46 @@ function App() {
                               setWallets(updatedWallets);
                               setSelectedWallet({ ...selectedWallet, type: WalletType.COLD, isOnline: false });
                               WalletStorage.saveWallets(updatedWallets);
-                              alert('✅ 已切换为冷钱包模式\n\n钱包将断开网络连接，手动刷新余额');
-                            }}
-                            className={`p-2 text-sm rounded border transition-colors ${
-                              selectedWallet.type === WalletType.COLD
-                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
-                          >
-                            ❄️ 冷钱包
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (selectedWallet.type === WalletType.WATCH_ONLY) {
-                                alert('✅ 当前已经是观察钱包模式');
-                                return;
-                              }
-                              const confirmed = confirm('⚠️ 切换为观察钱包将清除私钥\n\n确定要继续吗？\n\n提示：请确保已备份助记词或私钥！');
-                              if (!confirmed) return;
+                              alert('✅ 已切换为冷钱包模式\n\n建议：\n1. 关闭此设备的 WiFi 和移动网络\n2. 开启飞行模式\n3. 使用另一台设备创建观测钱包\n4. 通过二维码进行交易签名');
+                              setWalletBalance('--');
+                            }
+                          }}
+                          className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                            selectedWallet.type === WalletType.COLD
+                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-lg'
+                              : 'border-gray-300 dark:border-gray-600 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 hover:border-blue-400'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="text-2xl">❄️</span>
+                            <div className="flex-1">
+                              <div className="font-semibold text-gray-800 dark:text-white mb-1">
+                                冷钱包（推荐大额存储）
+                                {selectedWallet.type === WalletType.COLD && (
+                                  <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded">当前</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400 space-y-0.5">
+                                <p>✓ 完全离线，私钥永不联网</p>
+                                <p>✓ 通过二维码签名交易</p>
+                                <p>✓ 配合观测钱包使用</p>
+                                <p className="text-blue-600 dark:text-blue-400">🔒 最高安全性</p>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                        
+                        {/* 观测钱包选项 */}
+                        <button
+                          onClick={() => {
+                            if (selectedWallet.type === WalletType.WATCH_ONLY) {
+                              alert('✅ 当前已经是观测钱包模式');
+                              return;
+                            }
+                            if (confirm('👁️ 切换为观测钱包模式？\n\n⚠️ 警告：这将永久删除此钱包的私钥！\n\n切换后：\n• 只能查看余额和交易历史\n• 无法签名和发送交易\n• 需要配合冷钱包创建交易\n\n❗ 请务必确保已备份助记词或私钥！\n\n确定要继续吗？')) {
+                              // 二次确认
+                              const doubleConfirm = confirm('⚠️ 最后确认\n\n您确定要删除私钥并切换为观测钱包吗？\n\n这个操作不可逆！\n\n如果丢失了助记词备份，将永久失去资金！');
+                              if (!doubleConfirm) return;
                               
                               const updatedWallets = wallets.map(w => 
                                 w.id === selectedWallet.id 
@@ -2830,20 +2904,33 @@ function App() {
                                 publicKey: undefined
                               });
                               WalletStorage.saveWallets(updatedWallets);
-                              alert('✅ 已切换为观察钱包模式\n\n私钥已清除，仅可查看余额和交易历史');
-                            }}
-                            className={`p-2 text-sm rounded border transition-colors ${
-                              selectedWallet.type === WalletType.WATCH_ONLY
-                                ? 'border-gray-500 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-                                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
-                          >
-                            👁️ 观察
-                          </button>
-                        </div>
-                        <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
-                          ⚠️ 切换为观察钱包将永久删除私钥，请谨慎操作！
-                        </p>
+                              alert('✅ 已切换为观测钱包模式\n\n私钥已删除，现在仅可：\n• 查看余额和交易历史\n• 创建未签名交易\n• 扫描冷钱包的签名结果\n\n建议：在另一台设备上使用冷钱包模式');
+                            }
+                          }}
+                          className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                            selectedWallet.type === WalletType.WATCH_ONLY
+                              ? 'border-gray-500 bg-gray-50 dark:bg-gray-800 shadow-lg'
+                              : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 hover:border-gray-400'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="text-2xl">👁️</span>
+                            <div className="flex-1">
+                              <div className="font-semibold text-gray-800 dark:text-white mb-1">
+                                观测钱包
+                                {selectedWallet.type === WalletType.WATCH_ONLY && (
+                                  <span className="ml-2 text-xs bg-gray-500 text-white px-2 py-0.5 rounded">当前</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400 space-y-0.5">
+                                <p>✓ 监控余额和交易历史</p>
+                                <p>✓ 创建未签名交易</p>
+                                <p>✓ 配合冷钱包使用</p>
+                                <p className="text-red-600 dark:text-red-400">⚠️ 无法签名（无私钥）</p>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -2941,7 +3028,9 @@ function App() {
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
                     <Camera className="w-6 h-6" />
-                    扫描二维码
+                    {selectedWallet?.type === WalletType.COLD && '扫描未签名交易'}
+                    {selectedWallet?.type === WalletType.WATCH_ONLY && '扫描签名结果'}
+                    {selectedWallet?.type === WalletType.HOT && '扫描二维码'}
                   </h2>
                   <button
                     onClick={closeScanDialog}
@@ -2950,6 +3039,54 @@ function App() {
                     <X className="w-6 h-6" />
                   </button>
                 </div>
+
+                {/* 根据钱包类型显示操作提示 */}
+                {selectedWallet && (
+                  <div className={`mb-4 px-4 py-3 rounded-lg border ${
+                    selectedWallet.type === WalletType.COLD 
+                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
+                      : selectedWallet.type === WalletType.WATCH_ONLY
+                      ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700'
+                      : 'bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-700'
+                  }`}>
+                    {selectedWallet.type === WalletType.COLD && (
+                      <div className="text-sm">
+                        <p className="font-semibold text-blue-800 dark:text-blue-200 mb-2">
+                          ❄️ 冷钱包扫描模式
+                        </p>
+                        <ul className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                          <li>• 对准观测钱包生成的<strong>未签名交易二维码</strong></li>
+                          <li>• 扫描后将显示交易详情供您确认</li>
+                          <li>• 确认无误后，钱包将使用私钥签名</li>
+                          <li>• 签名完成后生成<strong>签名结果二维码</strong></li>
+                        </ul>
+                      </div>
+                    )}
+                    {selectedWallet.type === WalletType.WATCH_ONLY && (
+                      <div className="text-sm">
+                        <p className="font-semibold text-green-800 dark:text-green-200 mb-2">
+                          👁️ 观测钱包扫描模式
+                        </p>
+                        <ul className="text-xs text-green-700 dark:text-green-300 space-y-1">
+                          <li>• 对准冷钱包生成的<strong>签名结果二维码</strong></li>
+                          <li>• 扫描后将显示签名详情供您确认</li>
+                          <li>• 确认无误后，将交易广播到区块链</li>
+                          <li>• 广播成功后可查看交易哈希</li>
+                        </ul>
+                      </div>
+                    )}
+                    {selectedWallet.type === WalletType.HOT && (
+                      <div className="text-sm">
+                        <p className="font-semibold text-gray-800 dark:text-gray-200 mb-2">
+                          🔥 热钱包扫描模式
+                        </p>
+                        <p className="text-xs text-gray-700 dark:text-gray-300">
+                          可以扫描地址、未签名交易、签名结果等各种二维码
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Camera Preview - 只在没有扫描结果和没有确认对话框时显示 */}
                 {!scanResult && !showConfirmDialog && (
