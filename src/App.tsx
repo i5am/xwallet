@@ -1722,132 +1722,179 @@ function App() {
                       ) : (
                         walletBalance
                       )}
-                      {selectedWallet.type === WalletType.COLD && !isLoadingBalance && (
-                        <button
-                          onClick={() => refreshBalance(selectedWallet)}
-                          className="text-sm btn-secondary px-3 py-1"
-                          title="刷新余额"
-                        >
-                          🔄
-                        </button>
-                      )}
                     </div>
                     <div className="text-gray-600 dark:text-gray-400">
                       {selectedWallet.chain === ChainType.BTC ? 'BTC' : 'ETH'}
                     </div>
-                    {selectedWallet.type === WalletType.COLD && (
-                      <div className="mt-4 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg">
-                        <p className="text-sm text-blue-800 dark:text-blue-200">
-                          ❄️ 冷钱包模式 - 点击 🔄 手动查询余额
-                        </p>
-                      </div>
-                    )}
-                    {selectedWallet.type === WalletType.WATCH_ONLY && (
-                      <div className="mt-4 px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg">
-                        <p className="text-sm text-gray-800 dark:text-gray-200">
-                          👁️ 观察钱包模式 - 只能查看余额和交易历史，无法发送和签名
-                        </p>
-                      </div>
-                    )}
-                    {Number(walletBalance) === 0 && selectedWallet.type === WalletType.HOT && !isLoadingBalance && (
-                      <div className="mt-4 px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg">
-                        <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                          ⚠️ 当前余额为 0,请先向钱包充值后再进行支付操作
-                        </p>
-                      </div>
-                    )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 mt-6">
-                    <button 
-                      onClick={() => {
-                        if (!selectedWallet) {
-                          alert('⚠️ 请先创建或选择一个钱包');
-                          return;
-                        }
-                        if (selectedWallet.type === WalletType.WATCH_ONLY) {
-                          alert('👁️ 观察钱包无法发送交易\n\n观察钱包仅用于查看余额和交易历史，不包含私钥，因此无法签名和发送交易。');
-                          return;
-                        }
-                        setShowSendDialog(true);
-                      }}
-                      className={`btn-primary flex items-center justify-center gap-2 ${
-                        selectedWallet?.type === WalletType.WATCH_ONLY 
-                          ? 'opacity-50 cursor-not-allowed' 
-                          : ''
-                      }`}
-                      disabled={selectedWallet?.type === WalletType.WATCH_ONLY}
-                    >
-                      <ArrowUpRight className="w-5 h-5" />
-                      发送
-                      {selectedWallet?.type === WalletType.WATCH_ONLY && ' 🔒'}
-                    </button>
-                    <button 
-                      onClick={() => {
-                        if (!selectedWallet) {
-                          alert('⚠️ 请先创建或选择一个钱包');
-                          return;
-                        }
-                        setShowReceiveDialog(true);
-                      }}
-                      className="btn-secondary flex items-center justify-center gap-2"
-                    >
-                      <ArrowDownLeft className="w-5 h-5" />
-                      接收
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 mt-4">
-                    <button 
-                      onClick={() => {
-                        if (!selectedWallet) {
-                          alert('⚠️ 请先创建或选择一个钱包');
-                          return;
-                        }
-                        if (selectedWallet.type === WalletType.WATCH_ONLY) {
-                          alert('👁️ 观察钱包无法签名\n\n观察钱包不包含私钥，因此无法对交易进行签名。');
-                          return;
-                        }
-                        setShowSignDialog(true);
-                      }}
-                      className={`btn-secondary flex items-center justify-center gap-2 ${
-                        selectedWallet?.type === WalletType.WATCH_ONLY 
-                          ? 'opacity-50 cursor-not-allowed' 
-                          : ''
-                      }`}
-                      disabled={selectedWallet?.type === WalletType.WATCH_ONLY}
-                    >
-                      ✍️ 签名
-                      {selectedWallet?.type === WalletType.WATCH_ONLY && ' 🔒'}
-                    </button>
-                    <button 
-                      onClick={() => {
-                        if (!selectedWallet) {
-                          alert('⚠️ 请先创建或选择一个钱包');
-                          return;
-                        }
-                        setShowAIPaymentDialog(true);
-                      }}
-                      className="btn-primary flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
-                    >
-                      <Zap className="w-5 h-5" />
-                      AI支付
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 mt-4">
-                    <button 
-                      onClick={() => {
-                        if (!selectedWallet) {
-                          alert('⚠️ 请先创建或选择一个钱包');
-                          return;
-                        }
-                        setShowScanDialog(true);
-                      }}
-                      className="btn-secondary flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white"
-                    >
-                      <Camera className="w-5 h-5" />
-                      扫描二维码
-                    </button>
-                  </div>
+                  {/* 根据钱包类型显示不同的功能按钮 */}
+                  
+                  {/* 热钱包：完整功能 */}
+                  {selectedWallet.type === WalletType.HOT && (
+                    <>
+                      <div className="mt-4 px-4 py-3 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 border border-orange-300 dark:border-orange-700 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xl">🔥</span>
+                          <h3 className="font-semibold text-orange-800 dark:text-orange-200">热钱包模式</h3>
+                        </div>
+                        <p className="text-sm text-orange-700 dark:text-orange-300">
+                          在线钱包，支持所有功能：发送、接收、签名、AI支付
+                        </p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3 mt-4">
+                        <button 
+                          onClick={() => setShowSendDialog(true)}
+                          className="btn-primary flex items-center justify-center gap-2"
+                        >
+                          <ArrowUpRight className="w-5 h-5" />
+                          发送
+                        </button>
+                        <button 
+                          onClick={() => setShowReceiveDialog(true)}
+                          className="btn-secondary flex items-center justify-center gap-2"
+                        >
+                          <ArrowDownLeft className="w-5 h-5" />
+                          接收
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3 mt-3">
+                        <button 
+                          onClick={() => setShowSignDialog(true)}
+                          className="btn-secondary flex items-center justify-center gap-2"
+                        >
+                          ✍️ 签名消息
+                        </button>
+                        <button 
+                          onClick={() => setShowAIPaymentDialog(true)}
+                          className="btn-primary flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+                        >
+                          <Zap className="w-5 h-5" />
+                          AI支付
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 gap-3 mt-3">
+                        <button 
+                          onClick={() => setShowScanDialog(true)}
+                          className="btn-secondary flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white"
+                        >
+                          <Camera className="w-5 h-5" />
+                          扫描二维码
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* 冷钱包：离线签名功能 */}
+                  {selectedWallet.type === WalletType.COLD && (
+                    <>
+                      <div className="mt-4 px-4 py-3 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border border-blue-300 dark:border-blue-700 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xl">❄️</span>
+                          <h3 className="font-semibold text-blue-800 dark:text-blue-200">冷钱包模式（离线）</h3>
+                        </div>
+                        <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+                          完全离线的安全钱包，通过二维码与观测钱包配合使用
+                        </p>
+                        <div className="text-xs text-blue-600 dark:text-blue-400 space-y-1 pl-4">
+                          <p>• 扫描二维码接收未签名交易</p>
+                          <p>• 离线签名交易后生成签名结果</p>
+                          <p>• 由观测钱包扫描签名结果并广播</p>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 gap-3 mt-4">
+                        <button 
+                          onClick={() => setShowReceiveDialog(true)}
+                          className="btn-primary flex items-center justify-center gap-2"
+                        >
+                          <QrCodeIcon className="w-5 h-5" />
+                          显示地址二维码
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 gap-3 mt-3">
+                        <button 
+                          onClick={() => setShowSignDialog(true)}
+                          className="btn-primary flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                        >
+                          ✍️ 签名交易/消息
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 gap-3 mt-3">
+                        <button 
+                          onClick={() => setShowScanDialog(true)}
+                          className="btn-secondary flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white"
+                        >
+                          <Camera className="w-5 h-5" />
+                          扫描未签名交易
+                        </button>
+                      </div>
+                      
+                      <div className="mt-3 px-3 py-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded text-xs text-yellow-800 dark:text-yellow-200">
+                        ⚠️ 冷钱包不支持直接发送和 AI 支付，请使用观测钱包创建交易
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* 观测钱包：只读功能 */}
+                  {selectedWallet.type === WalletType.WATCH_ONLY && (
+                    <>
+                      <div className="mt-4 px-4 py-3 bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-800 dark:to-slate-800 border border-gray-300 dark:border-gray-700 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xl">👁️</span>
+                          <h3 className="font-semibold text-gray-800 dark:text-gray-200">观测钱包模式（只读）</h3>
+                        </div>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                          监控钱包余额和交易，为冷钱包创建未签名交易
+                        </p>
+                        <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1 pl-4">
+                          <p>✅ 查看余额和交易历史</p>
+                          <p>✅ 创建未签名交易（生成二维码）</p>
+                          <p>✅ 扫描冷钱包的签名结果并广播</p>
+                          <p>❌ 无法直接签名（需配合冷钱包）</p>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3 mt-4">
+                        <button 
+                          onClick={() => {
+                            // 观测钱包的"发送"实际上是创建未签名交易
+                            setShowSendDialog(true);
+                          }}
+                          className="btn-primary flex items-center justify-center gap-2"
+                        >
+                          <QrCodeIcon className="w-5 h-5" />
+                          创建交易
+                        </button>
+                        <button 
+                          onClick={() => setShowReceiveDialog(true)}
+                          className="btn-secondary flex items-center justify-center gap-2"
+                        >
+                          <ArrowDownLeft className="w-5 h-5" />
+                          接收地址
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 gap-3 mt-3">
+                        <button 
+                          onClick={() => setShowScanDialog(true)}
+                          className="btn-primary flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                        >
+                          <Camera className="w-5 h-5" />
+                          扫描签名结果并广播
+                        </button>
+                      </div>
+                      
+                      <div className="mt-3 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded text-xs text-blue-800 dark:text-blue-200">
+                        💡 提示：点击"创建交易"生成未签名交易二维码，用冷钱包扫描签名后，再回来扫描签名结果
+                      </div>
+                    </>
+                  )}
                     {/* 新增功能入口按钮 */}
                     <div className="grid grid-cols-1 gap-3 mt-4">
                       <button
@@ -1949,9 +1996,48 @@ function App() {
         {showSendDialog && selectedWallet && (
           <div className="dialog-overlay">
             <div className="dialog-content card max-h-[90vh] overflow-y-auto">
-              <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
-                发送 {selectedWallet.chain === ChainType.BTC ? 'BTC' : 'ETH'}
+              <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white flex items-center gap-2">
+                {selectedWallet.type === WalletType.WATCH_ONLY ? (
+                  <>
+                    <QrCodeIcon className="w-6 h-6" />
+                    创建未签名交易
+                  </>
+                ) : selectedWallet.type === WalletType.COLD ? (
+                  <>
+                    <span className="text-xl">❄️</span>
+                    生成未签名交易
+                  </>
+                ) : (
+                  <>
+                    <ArrowUpRight className="w-6 h-6" />
+                    发送 {selectedWallet.chain === ChainType.BTC ? 'BTC' : 'ETH'}
+                  </>
+                )}
               </h2>
+              
+              {/* 观测钱包提示 */}
+              {selectedWallet.type === WalletType.WATCH_ONLY && (
+                <div className="mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    <strong>👁️ 观测钱包流程：</strong>
+                  </p>
+                  <ol className="text-xs text-blue-700 dark:text-blue-300 mt-2 space-y-1 pl-5">
+                    <li>1. 填写交易信息并生成未签名交易二维码</li>
+                    <li>2. 用冷钱包扫描二维码</li>
+                    <li>3. 冷钱包签名后生成签名结果二维码</li>
+                    <li>4. 回到这里扫描签名结果并广播到区块链</li>
+                  </ol>
+                </div>
+              )}
+              
+              {/* 冷钱包提示 */}
+              {selectedWallet.type === WalletType.COLD && (
+                <div className="mb-4 px-4 py-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                    <strong>❄️ 冷钱包提示：</strong> 建议使用观测钱包创建交易，冷钱包仅用于扫描和签名
+                  </p>
+                </div>
+              )}
               
               {!transactionQrCode ? (
                 <div className="space-y-4">
@@ -2239,9 +2325,25 @@ function App() {
         {showSignDialog && selectedWallet && (
           <div className="dialog-overlay">
             <div className="dialog-content card">
-              <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
-                消息签名
+              <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white flex items-center gap-2">
+                ✍️ 
+                {selectedWallet.type === WalletType.COLD ? '冷钱包签名' : '消息签名'}
               </h2>
+              
+              {/* 冷钱包签名提示 */}
+              {selectedWallet.type === WalletType.COLD && (
+                <div className="mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    <strong>❄️ 离线签名流程：</strong>
+                  </p>
+                  <ol className="text-xs text-blue-700 dark:text-blue-300 mt-2 space-y-1 pl-5">
+                    <li>1. 点击扫描按钮，扫描观测钱包的未签名交易二维码</li>
+                    <li>2. 确认交易信息无误后进行签名</li>
+                    <li>3. 将生成的签名结果二维码给观测钱包扫描</li>
+                    <li>4. 观测钱包将签名结果广播到区块链</li>
+                  </ol>
+                </div>
+              )}
               <div className="space-y-4">
                 <div>
                   <label className="text-sm text-gray-600 dark:text-gray-400">要签名的消息</label>
@@ -3871,6 +3973,19 @@ function App() {
                   <X className="w-6 h-6" />
                 </button>
               </div>
+
+              {/* 根据钱包类型显示不同提示 */}
+              {selectedWallet && selectedWallet.type === WalletType.COLD && (
+                <div className="mb-4 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded text-xs text-blue-800 dark:text-blue-200">
+                  ❄️ 扫描观测钱包生成的未签名交易二维码
+                </div>
+              )}
+              
+              {selectedWallet && selectedWallet.type === WalletType.WATCH_ONLY && (
+                <div className="mb-4 px-3 py-2 bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded text-xs text-green-800 dark:text-green-200">
+                  👁️ 扫描冷钱包生成的签名结果二维码
+                </div>
+              )}
 
               <div className="space-y-4">
                 <div className="relative bg-black rounded-lg overflow-hidden" style={{ height: '300px' }}>
