@@ -90,6 +90,17 @@ function App() {
   const [showTransactionHistory, setShowTransactionHistory] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   
+  // DeepSafe 多签钱包相关状态
+  const [showMultisigSetup, setShowMultisigSetup] = useState(false);
+  const [multisigChain, setMultisigChain] = useState<ChainType>(ChainType.BTC);
+  const [multisigM, setMultisigM] = useState<number>(2);
+  const [multisigN, setMultisigN] = useState<number>(3);
+  const [multisigSigners, setMultisigSigners] = useState<any[]>([]);
+  const [showMultisigProposals, setShowMultisigProposals] = useState(false);
+  const [multisigProposals, setMultisigProposals] = useState<any[]>([]);
+  const [selectedProposal, setSelectedProposal] = useState<any>(null);
+  const [showProposalDetail, setShowProposalDetail] = useState(false);
+  
   // 摄像头相关 refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1831,6 +1842,35 @@ function App() {
                         ❄️ ETH 冷钱包
                       </button>
                     </div>
+                    
+                    {/* DeepSafe 多签钱包 */}
+                    <div className="pt-2 border-t border-gray-300 dark:border-gray-600">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => {
+                            setShowCreateWallet(false);
+                            setShowMultisigSetup(true);
+                            setMultisigChain(ChainType.BTC);
+                          }}
+                          className="btn-secondary text-sm bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border-purple-300 dark:border-purple-700"
+                        >
+                          🔐 BTC 多签钱包
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowCreateWallet(false);
+                            setShowMultisigSetup(true);
+                            setMultisigChain(ChainType.ETH);
+                          }}
+                          className="btn-secondary text-sm bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border-purple-300 dark:border-purple-700"
+                        >
+                          🔐 ETH 多签钱包
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+                        DeepSafe 多签方案 - 多人共管，更安全
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1868,6 +1908,7 @@ function App() {
                             {wallet.type === WalletType.HOT && '🔥'}
                             {wallet.type === WalletType.COLD && '❄️'}
                             {wallet.type === WalletType.WATCH_ONLY && '👁️'}
+                            {wallet.type === WalletType.MULTISIG && '🔐'}
                           </div>
                           <button
                             onClick={(e) => {
@@ -4452,6 +4493,222 @@ function App() {
                   >
                     <Camera className="w-5 h-5" />
                     拍照识别
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DeepSafe 多签钱包设置对话框 */}
+        {showMultisigSetup && (
+          <div className="dialog-overlay" style={{ zIndex: 50 }}>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                    <span className="text-3xl">🔐</span>
+                    创建 DeepSafe 多签钱包
+                  </h2>
+                  <button
+                    onClick={() => {
+                      setShowMultisigSetup(false);
+                      setMultisigSigners([]);
+                    }}
+                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {/* 信息提示 */}
+                <div className="mb-6 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-300 dark:border-purple-700 rounded-lg">
+                  <p className="text-sm text-purple-800 dark:text-purple-300">
+                    <strong>💡 什么是多签钱包？</strong><br/>
+                    多签钱包需要多个签名者共同授权才能完成交易，提供更高的安全性。
+                    例如 2-of-3 表示：3个签名者中需要至少2个人签名才能转账。
+                  </p>
+                </div>
+
+                {/* 链类型 */}
+                <div className="mb-6">
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    区块链类型
+                  </label>
+                  <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                    <div className="text-lg font-medium text-gray-800 dark:text-white">
+                      {multisigChain === ChainType.BTC ? '🟠 Bitcoin (BTC)' : '⬢ Ethereum (ETH)'}
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      {multisigChain === ChainType.BTC 
+                        ? 'P2WSH 多签方案 - 原生隔离见证'
+                        : 'Gnosis Safe 智能合约多签方案'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 签名策略 */}
+                <div className="mb-6">
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    签名策略 (M-of-N)
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                        需要签名数 (M)
+                      </label>
+                      <select
+                        value={multisigM}
+                        onChange={(e) => setMultisigM(parseInt(e.target.value))}
+                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                      >
+                        {[1, 2, 3, 4, 5].filter(n => n <= multisigN).map(n => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                        总签名者数 (N)
+                      </label>
+                      <select
+                        value={multisigN}
+                        onChange={(e) => {
+                          const newN = parseInt(e.target.value);
+                          setMultisigN(newN);
+                          if (multisigM > newN) setMultisigM(newN);
+                        }}
+                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                      >
+                        {[2, 3, 4, 5, 6, 7].map(n => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mt-2 text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <span className="text-blue-800 dark:text-blue-300 font-semibold text-lg">
+                      {multisigM}-of-{multisigN} 多签方案
+                    </span>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      需要 {multisigM} 个签名者同意才能完成交易
+                    </p>
+                  </div>
+                </div>
+
+                {/* 签名者列表 */}
+                <div className="mb-6">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      签名者列表 ({multisigSigners.length}/{multisigN})
+                    </label>
+                    {multisigSigners.length < multisigN && (
+                      <button
+                        onClick={() => {
+                          // 添加签名者
+                          const name = prompt('请输入签名者名称（如：自己、合伙人A、审计员）:');
+                          if (!name) return;
+                          
+                          const publicKey = prompt('请输入签名者的公钥或地址:');
+                          if (!publicKey) return;
+                          
+                          const isMe = multisigSigners.length === 0 || confirm('这是您自己的地址吗？');
+                          
+                          setMultisigSigners([...multisigSigners, {
+                            id: `signer_${Date.now()}`,
+                            name,
+                            publicKey,
+                            address: publicKey, // 简化处理
+                            isMe
+                          }]);
+                        }}
+                        className="text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded transition-colors"
+                      >
+                        + 添加签名者
+                      </button>
+                    )}
+                  </div>
+
+                  {multisigSigners.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+                      还没有添加签名者，点击上方按钮开始添加
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {multisigSigners.map((signer, index) => (
+                        <div
+                          key={signer.id}
+                          className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-gray-800 dark:text-white">
+                                  {index + 1}. {signer.name}
+                                </span>
+                                {signer.isMe && (
+                                  <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-0.5 rounded">
+                                    自己
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400 font-mono mt-1">
+                                {formatAddress(signer.address)}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (confirm(`确认移除签名者 "${signer.name}"？`)) {
+                                  setMultisigSigners(multisigSigners.filter(s => s.id !== signer.id));
+                                }
+                              }}
+                              className="text-red-500 hover:text-red-700 p-2"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 操作按钮 */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowMultisigSetup(false);
+                      setMultisigSigners([]);
+                    }}
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white p-3 rounded transition-colors font-medium"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (multisigSigners.length !== multisigN) {
+                        alert(`❌ 请添加 ${multisigN} 个签名者\n\n当前已添加: ${multisigSigners.length} 个`);
+                        return;
+                      }
+                      
+                      if (!multisigSigners.some(s => s.isMe)) {
+                        alert('❌ 至少需要一个签名者是您自己');
+                        return;
+                      }
+                      
+                      // 创建多签钱包
+                      alert('🚧 多签钱包创建功能开发中...\n\n将生成多签地址并保存配置');
+                      setShowMultisigSetup(false);
+                      setMultisigSigners([]);
+                    }}
+                    disabled={multisigSigners.length !== multisigN}
+                    className={`flex-1 p-3 rounded transition-colors font-medium ${
+                      multisigSigners.length === multisigN
+                        ? 'bg-purple-500 hover:bg-purple-600 text-white'
+                        : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    🔐 创建多签钱包
                   </button>
                 </div>
               </div>

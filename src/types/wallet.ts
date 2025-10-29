@@ -4,7 +4,8 @@
 export enum WalletType {
   HOT = 'hot',           // 热钱包
   COLD = 'cold',         // 冷钱包
-  WATCH_ONLY = 'watch'   // 观测钱包
+  WATCH_ONLY = 'watch',  // 观测钱包
+  MULTISIG = 'multisig'  // DeepSafe 多签钱包
 }
 
 /**
@@ -40,6 +41,9 @@ export interface Wallet {
   mnemonic?: string;     // 助记词（仅热钱包和冷钱包）
   privateKey?: string;   // 私钥（仅热钱包和冷钱包）
   publicKey?: string;    // 公钥（所有类型都有）
+  
+  // 多签配置（仅多签钱包）
+  multisigConfig?: MultisigConfig;
   
   // 余额信息
   balance?: Balance;
@@ -150,4 +154,118 @@ export interface AppSettings {
   theme: 'light' | 'dark'; // 主题
   securityPin?: string;  // PIN 码（加密存储）
   autoLockMinutes: number; // 自动锁定时间
+}
+
+/**
+ * DeepSafe 多签配置
+ */
+export interface MultisigConfig {
+  m: number;                    // 需要的最少签名数
+  n: number;                    // 总签名者数量
+  signers: MultisigSigner[];    // 签名者列表
+  script?: string;              // 多签脚本（BTC）
+  contractAddress?: string;     // 智能合约地址（ETH）
+  createdBy: string;            // 创建者地址
+  createdAt: number;            // 创建时间
+}
+
+/**
+ * 多签签名者
+ */
+export interface MultisigSigner {
+  id: string;                   // 签名者ID
+  name: string;                 // 签名者名称/备注
+  address: string;              // 地址
+  publicKey: string;            // 公钥
+  isMe: boolean;                // 是否是自己
+  status: SignerStatus;         // 状态
+  addedAt: number;              // 添加时间
+  addedBy: string;              // 添加者
+}
+
+/**
+ * 签名者状态
+ */
+export enum SignerStatus {
+  ACTIVE = 'active',            // 活跃
+  PENDING = 'pending',          // 待确认
+  REVOKED = 'revoked'           // 已撤销
+}
+
+/**
+ * 多签交易提案
+ */
+export interface MultisigProposal {
+  id: string;                   // 提案ID
+  walletId: string;             // 多签钱包ID
+  chain: ChainType;             // 链类型
+  network: NetworkType;         // 网络类型
+  
+  // 交易信息
+  to: string;                   // 收款地址
+  amount: string;               // 金额
+  fee: string;                  // 手续费
+  memo?: string;                // 备注
+  data?: string;                // 合约调用数据（ETH）
+  
+  // 提案状态
+  status: ProposalStatus;
+  createdBy: string;            // 发起者地址
+  createdAt: number;            // 创建时间
+  expiresAt: number;            // 过期时间
+  
+  // 签名信息
+  signatures: MultisigSignature[]; // 签名列表
+  requiredSignatures: number;   // 需要的签名数
+  
+  // 交易数据
+  rawTx: string;                // 原始交易
+  signedTx?: string;            // 完整签名的交易
+  txHash?: string;              // 交易哈希（已广播后）
+  
+  // 元数据
+  broadcastedAt?: number;       // 广播时间
+  confirmedAt?: number;         // 确认时间
+  rejectedBy?: string[];        // 拒绝者列表
+}
+
+/**
+ * 提案状态
+ */
+export enum ProposalStatus {
+  PENDING = 'pending',          // 待签名
+  SIGNING = 'signing',          // 签名中
+  READY = 'ready',              // 签名完成，可广播
+  BROADCASTED = 'broadcasted',  // 已广播
+  CONFIRMED = 'confirmed',      // 已确认
+  REJECTED = 'rejected',        // 已拒绝
+  EXPIRED = 'expired',          // 已过期
+  FAILED = 'failed'             // 失败
+}
+
+/**
+ * 多签签名
+ */
+export interface MultisigSignature {
+  signer: string;               // 签名者地址
+  publicKey: string;            // 公钥
+  signature: string;            // 签名数据
+  signedAt: number;             // 签名时间
+  version: string;              // 签名版本
+}
+
+/**
+ * 多签钱包创建参数
+ */
+export interface CreateMultisigParams {
+  name: string;                 // 钱包名称
+  chain: ChainType;             // 链类型
+  network: NetworkType;         // 网络类型
+  m: number;                    // 需要的签名数
+  signers: {
+    name: string;
+    publicKey: string;
+    address: string;
+    isMe: boolean;
+  }[];
 }
