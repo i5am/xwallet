@@ -167,6 +167,46 @@ export interface MultisigConfig {
   contractAddress?: string;     // 智能合约地址（ETH）
   createdBy: string;            // 创建者地址
   createdAt: number;            // 创建时间
+  
+  // CRVA 验证配置
+  crvaConfig?: CRVAConfig;      // CRVA 随机验证配置
+}
+
+/**
+ * CRVA (Cryptographic Random Verification Agent) 配置
+ * 基于 Ring VRF 的随机验证节点选取机制
+ */
+export interface CRVAConfig {
+  enabled: boolean;             // 是否启用 CRVA 验证
+  verificationNodes: CRVANode[]; // 验证节点列表
+  minVerifiers: number;         // 最少验证节点数
+  ringVRFPublicKey: string;     // Ring VRF 公钥
+  committeeTTL: number;         // 委员会有效期（秒）
+  lastRotation: number;         // 上次轮换时间
+}
+
+/**
+ * CRVA 验证节点
+ */
+export interface CRVANode {
+  id: string;                   // 节点ID
+  endpoint: string;             // 节点端点
+  publicKey: string;            // 节点公钥
+  ringVRFProof?: string;        // Ring VRF 证明
+  status: CRVANodeStatus;       // 节点状态
+  lastActive: number;           // 最后活跃时间
+  reputation: number;           // 信誉分数 (0-100)
+}
+
+/**
+ * CRVA 节点状态
+ */
+export enum CRVANodeStatus {
+  ACTIVE = 'active',            // 活跃
+  SELECTED = 'selected',        // 已选中（当前委员会）
+  STANDBY = 'standby',          // 待命
+  OFFLINE = 'offline',          // 离线
+  BANNED = 'banned'             // 已封禁
 }
 
 /**
@@ -218,6 +258,9 @@ export interface MultisigProposal {
   signatures: MultisigSignature[]; // 签名列表
   requiredSignatures: number;   // 需要的签名数
   
+  // CRVA 验证信息
+  crvaVerification?: CRVAVerification; // CRVA 验证结果
+  
   // 交易数据
   rawTx: string;                // 原始交易
   signedTx?: string;            // 完整签名的交易
@@ -227,6 +270,23 @@ export interface MultisigProposal {
   broadcastedAt?: number;       // 广播时间
   confirmedAt?: number;         // 确认时间
   rejectedBy?: string[];        // 拒绝者列表
+}
+
+/**
+ * CRVA 验证结果
+ */
+export interface CRVAVerification {
+  verificationId: string;       // 验证ID
+  committeeNodes: string[];     // 当前委员会节点ID列表
+  ringVRFProof: string;         // Ring VRF 随机性证明
+  verifications: {
+    nodeId: string;             // 节点ID
+    verified: boolean;          // 验证结果
+    timestamp: number;          // 验证时间
+    proof: string;              // 验证证明
+  }[];
+  consensusReached: boolean;    // 是否达成共识
+  consensusTimestamp?: number;  // 共识达成时间
 }
 
 /**
