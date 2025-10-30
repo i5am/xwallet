@@ -1,0 +1,13 @@
+node_modules
+.env
+coverage
+coverage.json
+typechain-types
+
+# Hardhat files
+cache
+artifacts
+
+# 部署文件（可选择性提交）
+deployments/*.json
+!deployments/.gitkeep
