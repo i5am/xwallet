@@ -7,6 +7,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { WebSocketServer } from './websocket/WebSocketServer';
 import { logger } from './utils/logger';
+import { apiRouter } from './api/routes';
 
 dotenv.config();
 
@@ -42,20 +43,8 @@ class CRVABackendSimple {
       });
     });
     
-    // API 根路径
-    this.app.get('/api', (req, res) => {
-      res.json({
-        name: 'CRVA Backend API',
-        version: '1.0.0',
-        mode: process.env.MODE || 'api',
-        endpoints: {
-          health: '/health',
-          nodes: '/api/nodes (TODO)',
-          transactions: '/api/transactions (TODO)',
-          committee: '/api/committee (TODO)'
-        }
-      });
-    });
+    // API 路由
+    this.app.use('/api', apiRouter);
     
     // 404
     this.app.use((req, res) => {

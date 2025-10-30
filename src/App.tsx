@@ -277,7 +277,7 @@ function App() {
       // const networkConfig = getNetworkConfig(multisigChain, network);
 
       // 创建 CRVA 配置
-      const crvaConfig = createDefaultCRVAConfig();
+      const crvaConfig = await createDefaultCRVAConfig();
       const crvaService = new CRVAService(crvaConfig);
 
       // 生成多签地址

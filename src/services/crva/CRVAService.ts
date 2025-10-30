@@ -4,6 +4,7 @@
  */
 
 import { CRVAConfig, CRVANode, CRVANodeStatus, CRVAVerification } from '../../types/wallet';
+import { API_CONFIG, createApiUrl, API_ENDPOINTS, apiLogger } from '../../config/api';
 
 export class CRVAService {
   private config: CRVAConfig;
@@ -246,12 +247,51 @@ export class CRVAService {
 /**
  * 创建默认的 CRVA 配置
  */
-export function createDefaultCRVAConfig(): CRVAConfig {
-  // 创建模拟的验证节点网络
+export async function createDefaultCRVAConfig(): Promise<CRVAConfig> {
+  // 如果是本地开发模式，从 API 获取真实节点
+  if (API_CONFIG.devMode) {
+    try {
+      apiLogger.info('从本地 API 获取验证节点列表...');
+      const response = await fetch(createApiUrl(API_ENDPOINTS.nodes));
+      
+      if (response.ok) {
+        const data = await response.json();
+        const nodes = data.nodes || [];
+        
+        if (nodes.length > 0) {
+          apiLogger.info(`成功获取 ${nodes.length} 个验证节点`);
+          
+          // 将 API 返回的节点转换为 CRVANode 格式
+          const crvaNodes: CRVANode[] = nodes.map((node: any) => ({
+            id: node.id || node.nodeId,
+            endpoint: node.endpoint || `${API_CONFIG.baseURL}/api/nodes/${node.id}`,
+            publicKey: node.publicKey || node.address,
+            status: node.status === 'active' ? CRVANodeStatus.ACTIVE : CRVANodeStatus.STANDBY,
+            lastActive: node.lastActive || Date.now(),
+            reputation: node.reputation || 90
+          }));
+          
+          return {
+            enabled: API_CONFIG.crva.enabled,
+            verificationNodes: crvaNodes,
+            minVerifiers: API_CONFIG.crva.minVerifiers,
+            ringVRFPublicKey: '0xRingVRF...LocalDev',
+            committeeTTL: 3600,
+            lastRotation: Date.now()
+          };
+        }
+      }
+    } catch (error) {
+      apiLogger.warn('无法连接到本地 API，使用模拟节点', error);
+    }
+  }
+  
+  // 如果无法获取真实节点，创建模拟的验证节点网络
+  apiLogger.info('使用模拟验证节点网络');
   const mockNodes: CRVANode[] = [
     {
       id: 'node_001',
-      endpoint: 'https://crva-node-1.deepsafe.network',
+      endpoint: `${API_CONFIG.baseURL}/api/nodes/node_001`,
       publicKey: '0x1234...node1',
       status: CRVANodeStatus.ACTIVE,
       lastActive: Date.now(),
@@ -259,7 +299,7 @@ export function createDefaultCRVAConfig(): CRVAConfig {
     },
     {
       id: 'node_002',
-      endpoint: 'https://crva-node-2.deepsafe.network',
+      endpoint: `${API_CONFIG.baseURL}/api/nodes/node_002`,
       publicKey: '0x5678...node2',
       status: CRVANodeStatus.ACTIVE,
       lastActive: Date.now(),
@@ -267,7 +307,7 @@ export function createDefaultCRVAConfig(): CRVAConfig {
     },
     {
       id: 'node_003',
-      endpoint: 'https://crva-node-3.deepsafe.network',
+      endpoint: `${API_CONFIG.baseURL}/api/nodes/node_003`,
       publicKey: '0x9abc...node3',
       status: CRVANodeStatus.ACTIVE,
       lastActive: Date.now(),
@@ -275,7 +315,7 @@ export function createDefaultCRVAConfig(): CRVAConfig {
     },
     {
       id: 'node_004',
-      endpoint: 'https://crva-node-4.deepsafe.network',
+      endpoint: `${API_CONFIG.baseURL}/api/nodes/node_004`,
       publicKey: '0xdef0...node4',
       status: CRVANodeStatus.STANDBY,
       lastActive: Date.now(),
@@ -283,7 +323,7 @@ export function createDefaultCRVAConfig(): CRVAConfig {
     },
     {
       id: 'node_005',
-      endpoint: 'https://crva-node-5.deepsafe.network',
+      endpoint: `${API_CONFIG.baseURL}/api/nodes/node_005`,
       publicKey: '0x3456...node5',
       status: CRVANodeStatus.STANDBY,
       lastActive: Date.now(),
@@ -292,9 +332,9 @@ export function createDefaultCRVAConfig(): CRVAConfig {
   ];
 
   return {
-    enabled: true,
+    enabled: API_CONFIG.crva.enabled,
     verificationNodes: mockNodes,
-    minVerifiers: 3,
+    minVerifiers: API_CONFIG.crva.minVerifiers,
     ringVRFPublicKey: '0xRingVRF...PublicKey',
     committeeTTL: 3600, // 1小时
     lastRotation: Date.now()
