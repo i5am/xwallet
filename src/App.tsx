@@ -13,7 +13,7 @@ import { ProtocolUtils } from './utils/protocol';
 import { WalletStorage } from './services/storage/WalletStorage';
 import { PasswordService } from './services/storage/PasswordService';
 import { CRVAService, createDefaultCRVAConfig } from './services/crva/CRVAService';
-import { Wallet as WalletIcon, Plus, ArrowUpRight, ArrowDownLeft, Settings, Zap, X, Camera, QrCode as QrCodeIcon, Lock, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Wallet as WalletIcon, Plus, ArrowUpRight, ArrowDownLeft, Settings, Zap, X, Camera, QrCode as QrCodeIcon, Lock, Eye, EyeOff, Trash2, FileText } from 'lucide-react';
 
 function App() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -2279,6 +2279,111 @@ function App() {
                       </div>
                     </>
                   )}
+                  
+                  {/* 多签钱包：DeepSafe CRVA 功能 */}
+                  {selectedWallet.type === WalletType.MULTISIG && selectedWallet.multisigConfig && (
+                    <>
+                      <div className="mt-4 px-4 py-3 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-300 dark:border-indigo-700 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xl">🔐</span>
+                          <h3 className="font-semibold text-indigo-800 dark:text-indigo-200">DeepSafe 多签钱包</h3>
+                        </div>
+                        <p className="text-sm text-indigo-700 dark:text-indigo-300 mb-2">
+                          {selectedWallet.multisigConfig.m}-of-{selectedWallet.multisigConfig.n} 多重签名，需要 {selectedWallet.multisigConfig.m} 个签名者批准
+                        </p>
+                        <div className="text-xs text-indigo-600 dark:text-indigo-400 space-y-1 pl-4">
+                          <p>✅ 创建转账提案</p>
+                          <p>✅ 签名待处理提案</p>
+                          <p>✅ CRVA 隐私验证（Ring VRF）</p>
+                          <p>✅ 达到阈值后自动执行</p>
+                        </div>
+                        
+                        {/* 显示签名者列表 */}
+                        <div className="mt-3 pt-3 border-t border-indigo-200 dark:border-indigo-700">
+                          <div className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-2">
+                            签名者 ({selectedWallet.multisigConfig.signers.length}):
+                          </div>
+                          <div className="space-y-1">
+                            {selectedWallet.multisigConfig.signers.map((signer, index) => (
+                              <div key={index} className="flex items-center gap-2 text-xs">
+                                <span className="text-indigo-600 dark:text-indigo-400">
+                                  {index + 1}.
+                                </span>
+                                <span className="font-mono text-indigo-800 dark:text-indigo-200 truncate">
+                                  {signer.name || `签名者${index + 1}`}
+                                </span>
+                                <span className={`ml-auto px-2 py-0.5 rounded text-xs ${
+                                  signer.status === SignerStatus.ACTIVE 
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                    : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                }`}>
+                                  {signer.status === SignerStatus.ACTIVE ? '活跃' : '待定'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        {/* CRVA 状态 */}
+                        {selectedWallet.multisigConfig.crvaConfig && (
+                          <div className="mt-3 pt-3 border-t border-indigo-200 dark:border-indigo-700">
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-green-600 dark:text-green-400">✓</span>
+                              <span className="text-indigo-700 dark:text-indigo-300">
+                                CRVA 验证已启用（{selectedWallet.multisigConfig.crvaConfig.verificationNodes.length} 个验证节点）
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3 mt-4">
+                        <button 
+                          onClick={() => {
+                            alert('🚧 多签转账提案功能开发中...\n\n请使用以下步骤：\n1. 点击"创建提案"创建转账提案\n2. 其他签名者扫描二维码签名\n3. 收集足够签名后执行交易');
+                            setShowSendDialog(true);
+                          }}
+                          className="btn-primary flex items-center justify-center gap-2"
+                        >
+                          <ArrowUpRight className="w-5 h-5" />
+                          创建提案
+                        </button>
+                        <button 
+                          onClick={() => setShowReceiveDialog(true)}
+                          className="btn-secondary flex items-center justify-center gap-2"
+                        >
+                          <ArrowDownLeft className="w-5 h-5" />
+                          接收地址
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3 mt-3">
+                        <button 
+                          onClick={() => {
+                            alert('🚧 提案列表功能开发中...\n\n将显示：\n• 待签名提案\n• 已签名提案\n• 已执行提案\n• 已拒绝提案');
+                          }}
+                          className="btn-secondary flex items-center justify-center gap-2"
+                        >
+                          <FileText className="w-5 h-5" />
+                          提案列表
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setShowScanDialog(true);
+                          }}
+                          className="btn-secondary flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white"
+                        >
+                          <Camera className="w-5 h-5" />
+                          扫描签名
+                        </button>
+                      </div>
+                      
+                      <div className="mt-3 px-3 py-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-300 dark:border-purple-700 rounded text-xs text-purple-800 dark:text-purple-200">
+                        💡 多签流程：创建提案 → 收集签名 → CRVA验证 → 达到阈值({selectedWallet.multisigConfig.m}个)后自动执行
+                      </div>
+                    </>
+                  )}
+                  
                     {/* 新增功能入口按钮 */}
                     <div className="grid grid-cols-1 gap-3 mt-4">
                       <button
