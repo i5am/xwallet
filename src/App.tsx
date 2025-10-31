@@ -402,15 +402,13 @@ function App() {
 
     try {
       const proposalId = `prop_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      const myAddress = selectedWallet.multisigConfig!.signers.find(s => s.isMe)?.address || '';
       
-      const proposal = {
+      // 构建提案数据
+      const proposalData = {
         id: proposalId,
         walletId: selectedWallet.id,
         type: 'TRANSFER',
-        status: 'PENDING',
-        creator: selectedWallet.multisigConfig!.signers.find(s => s.isMe)?.address || '',
-        createdAt: Date.now(),
-        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7天后过期
         transaction: {
           from: selectedWallet.address,
           to: sendToAddress,
@@ -419,12 +417,34 @@ function App() {
           chain: selectedWallet.chain,
           network: selectedWallet.network,
           memo: sendMemo || ''
-        },
+        }
+      };
+
+      // 生成签名消息（对提案数据进行哈希）
+      const messageToSign = JSON.stringify(proposalData);
+      const messageHash = await window.crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(messageToSign)
+      );
+      const hashHex = Array.from(new Uint8Array(messageHash))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      // 创建者签名（使用简化的签名，实际应该用私钥签名）
+      const creatorSignature = `0x${hashHex.substring(0, 40)}_${myAddress.substring(0, 10)}`;
+
+      const proposal = {
+        ...proposalData,
+        status: 'PENDING',
+        creator: myAddress,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7天后过期
+        messageHash: hashHex, // 保存消息哈希用于验证
         signatures: [
           {
-            signer: selectedWallet.multisigConfig!.signers.find(s => s.isMe)?.address || '',
+            signer: myAddress,
             signedAt: Date.now(),
-            signature: `sig_${Date.now()}_creator`, // 创建者自动签名
+            signature: creatorSignature,
             status: 'APPROVED'
           }
         ],
@@ -497,27 +517,34 @@ function App() {
     }
 
     try {
+      // 使用提案的消息哈希生成签名
+      const messageToSign = JSON.stringify({
+        proposalId: proposal.id,
+        walletId: proposal.walletId,
+        transaction: proposal.transaction,
+        signer: myAddress
+      });
+      
+      const messageHash = await window.crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(messageToSign)
+      );
+      const hashHex = Array.from(new Uint8Array(messageHash))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      // 生成签名（使用哈希 + 地址标识）
+      const signature = `0x${hashHex.substring(0, 40)}_${myAddress.substring(0, 10)}`;
+
       // 添加签名
       const newSignature = {
         signer: myAddress,
         signedAt: Date.now(),
-        signature: `sig_${Date.now()}_${myAddress}`,
+        signature: signature,
         status: 'APPROVED'
       };
 
       proposal.signatures.push(newSignature);
-
-      // 检查是否达到阈值
-      if (proposal.signatures.length >= proposal.requiredSignatures) {
-        proposal.status = 'APPROVED';
-        
-        // TODO: 执行 CRVA 验证
-        // TODO: 广播交易
-        
-        alert(`✅ 签名成功！\n\n提案已获得足够签名 (${proposal.signatures.length}/${proposal.requiredSignatures})\n状态: 已批准，等待执行\n\n将自动提交到 CRVA 验证网络`);
-      } else {
-        alert(`✅ 签名成功！\n\n当前签名: ${proposal.signatures.length}/${proposal.requiredSignatures}\n还需要: ${proposal.requiredSignatures - proposal.signatures.length} 个签名`);
-      }
 
       // 更新提案列表
       const updatedProposals = multisigProposals.map(p => 
@@ -527,6 +554,44 @@ function App() {
       
       // 保存到本地存储
       localStorage.setItem(`proposals_${selectedWallet.id}`, JSON.stringify(updatedProposals));
+
+      // 生成签名二维码供其他人扫描
+      const signatureQR = await QRCode.toDataURL(JSON.stringify({
+        protocol: 'WDK',
+        version: '1.0',
+        type: 'MULTISIG_SIGNATURE',
+        data: {
+          proposalId: proposal.id,
+          walletId: proposal.walletId,
+          signature: newSignature,
+          proposalStatus: proposal.status,
+          currentSignatures: proposal.signatures.length,
+          requiredSignatures: proposal.requiredSignatures
+        }
+      }), {
+        width: 300,
+        margin: 2
+      });
+
+      // 检查是否达到阈值
+      if (proposal.signatures.length >= proposal.requiredSignatures) {
+        proposal.status = 'APPROVED';
+        
+        // TODO: 执行 CRVA 验证
+        // TODO: 广播交易
+        
+        // 显示签名二维码
+        setUnsignedTxQrCode(signatureQR);
+        setShowUnsignedTxDialog(true);
+        
+        alert(`✅ 签名成功！\n\n提案已获得足够签名 (${proposal.signatures.length}/${proposal.requiredSignatures})\n状态: 已批准，等待执行\n\n将自动提交到 CRVA 验证网络\n\n已生成签名二维码，可分享给其他签名者`);
+      } else {
+        // 显示签名二维码
+        setUnsignedTxQrCode(signatureQR);
+        setShowUnsignedTxDialog(true);
+        
+        alert(`✅ 签名成功！\n\n当前签名: ${proposal.signatures.length}/${proposal.requiredSignatures}\n还需要: ${proposal.requiredSignatures - proposal.signatures.length} 个签名\n\n已生成签名二维码，请分享给其他签名者扫描`);
+      }
       
     } catch (error) {
       console.error('签名失败:', error);
@@ -1669,6 +1734,72 @@ function App() {
         
         // 根据协议消息类型进行分类
         switch (protocolMessage.type) {
+          case 'MULTISIG_PROPOSAL':
+            // 多签提案，显示并保存
+            if (selectedWallet && selectedWallet.type === WalletType.MULTISIG) {
+              const proposal = protocolMessage.data;
+              
+              // 检查是否已存在
+              const existing = multisigProposals.find((p: any) => p.id === proposal.id);
+              if (existing) {
+                alert('⚠️ 此提案已存在');
+                setShowScanDialog(false);
+                return;
+              }
+              
+              // 保存提案
+              const updatedProposals = [...multisigProposals, proposal];
+              setMultisigProposals(updatedProposals);
+              localStorage.setItem(`proposals_${selectedWallet.id}`, JSON.stringify(updatedProposals));
+              
+              alert(`✅ 提案导入成功！\n\n提案ID: ${proposal.id}\n类型: ${proposal.type}\n金额: ${proposal.transaction.amount} ${proposal.transaction.chain}\n当前签名: ${proposal.signatures.length}/${proposal.requiredSignatures}\n\n您可以在"提案列表"中查看并签名`);
+              setShowScanDialog(false);
+            } else {
+              alert('❌ 请使用多签钱包扫描提案');
+            }
+            break;
+
+          case 'MULTISIG_SIGNATURE':
+            // 多签签名，导入到对应提案
+            if (selectedWallet && selectedWallet.type === WalletType.MULTISIG) {
+              const { proposalId, signature } = protocolMessage.data;
+              
+              const proposal = multisigProposals.find((p: any) => p.id === proposalId);
+              if (!proposal) {
+                alert('❌ 未找到对应的提案，请先导入提案');
+                setShowScanDialog(false);
+                return;
+              }
+              
+              // 检查是否已有此签名者的签名
+              if (proposal.signatures.some((s: any) => s.signer === signature.signer)) {
+                alert('⚠️ 此签名者已经签名过此提案');
+                setShowScanDialog(false);
+                return;
+              }
+              
+              // 添加签名
+              proposal.signatures.push(signature);
+              
+              // 检查是否达到阈值
+              if (proposal.signatures.length >= proposal.requiredSignatures) {
+                proposal.status = 'APPROVED';
+              }
+              
+              // 更新提案列表
+              const updatedProposals = multisigProposals.map((p: any) => 
+                p.id === proposalId ? proposal : p
+              );
+              setMultisigProposals(updatedProposals);
+              localStorage.setItem(`proposals_${selectedWallet.id}`, JSON.stringify(updatedProposals));
+              
+              alert(`✅ 签名导入成功！\n\n提案ID: ${proposalId}\n签名者: ${signature.signer.substring(0, 10)}...\n当前签名: ${proposal.signatures.length}/${proposal.requiredSignatures}\n状态: ${proposal.status === 'APPROVED' ? '已批准' : '待签名'}`);
+              setShowScanDialog(false);
+            } else {
+              alert('❌ 请使用多签钱包扫描签名');
+            }
+            break;
+          
           case 'SIGN_MESSAGE_REQUEST':
             setScanDataType('message');
             setShowConfirmDialog(true);

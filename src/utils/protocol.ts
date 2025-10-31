@@ -35,6 +35,7 @@ export enum MessageType {
   
   // DeepSafe 多签钱包
   MULTISIG_PROPOSAL = 'MULTISIG_PROPOSAL',              // 多签交易提案
+  MULTISIG_SIGNATURE = 'MULTISIG_SIGNATURE',            // 单个签名
   MULTISIG_PARTIAL_SIGNED = 'MULTISIG_PARTIAL_SIGNED',  // 部分签名
   MULTISIG_COMPLETE = 'MULTISIG_COMPLETE',              // 签名完成
   MULTISIG_WALLET_INFO = 'MULTISIG_WALLET_INFO',        // 多签钱包信息
