@@ -422,6 +422,46 @@ function App() {
 
       // 生成签名消息（对提案数据进行哈希）
       const messageToSign = JSON.stringify(proposalData);
+      
+      let creatorSignature: string;
+      
+      // 根据链类型使用不同的签名方式
+      if (selectedWallet.chain === ChainType.ETH) {
+        // ETH 使用 ethers 签名
+        if (!selectedWallet.privateKey) {
+          alert('❌ 热钱包缺少私钥，无法签名');
+          return;
+        }
+        
+        try {
+          const ethAdapter = new ETHAdapter(selectedWallet.network);
+          creatorSignature = await ethAdapter.signMessage(messageToSign, selectedWallet.privateKey);
+          console.log('✅ 创建者 ETH 签名成功:', creatorSignature);
+        } catch (error) {
+          console.error('创建者签名失败:', error);
+          // 降级到哈希签名
+          const messageHash = await window.crypto.subtle.digest(
+            'SHA-256',
+            new TextEncoder().encode(messageToSign)
+          );
+          const hashHex = Array.from(new Uint8Array(messageHash))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+          creatorSignature = `0x${hashHex.substring(0, 40)}_${myAddress.substring(0, 10)}`;
+        }
+      } else {
+        // BTC 或其他链使用哈希签名
+        const messageHash = await window.crypto.subtle.digest(
+          'SHA-256',
+          new TextEncoder().encode(messageToSign)
+        );
+        const hashHex = Array.from(new Uint8Array(messageHash))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+        creatorSignature = `0x${hashHex.substring(0, 40)}_${myAddress.substring(0, 10)}`;
+      }
+      
+      // 计算消息哈希用于验证
       const messageHash = await window.crypto.subtle.digest(
         'SHA-256',
         new TextEncoder().encode(messageToSign)
@@ -429,9 +469,6 @@ function App() {
       const hashHex = Array.from(new Uint8Array(messageHash))
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
-
-      // 创建者签名（使用简化的签名，实际应该用私钥签名）
-      const creatorSignature = `0x${hashHex.substring(0, 40)}_${myAddress.substring(0, 10)}`;
 
       const proposal = {
         ...proposalData,
@@ -517,7 +554,7 @@ function App() {
     }
 
     try {
-      // 使用提案的消息哈希生成签名
+      // 构建要签名的消息
       const messageToSign = JSON.stringify({
         proposalId: proposal.id,
         walletId: proposal.walletId,
@@ -525,16 +562,44 @@ function App() {
         signer: myAddress
       });
       
-      const messageHash = await window.crypto.subtle.digest(
-        'SHA-256',
-        new TextEncoder().encode(messageToSign)
-      );
-      const hashHex = Array.from(new Uint8Array(messageHash))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-
-      // 生成签名（使用哈希 + 地址标识）
-      const signature = `0x${hashHex.substring(0, 40)}_${myAddress.substring(0, 10)}`;
+      let signature: string;
+      
+      // 根据链类型使用不同的签名方式
+      if (selectedWallet.chain === ChainType.ETH) {
+        // ETH 使用 ethers 签名
+        if (!selectedWallet.privateKey) {
+          alert('❌ 热钱包缺少私钥，无法签名');
+          return;
+        }
+        
+        try {
+          const ethAdapter = new ETHAdapter(selectedWallet.network);
+          const signedMessage = await ethAdapter.signMessage(messageToSign, selectedWallet.privateKey);
+          signature = signedMessage;
+          console.log('✅ ETH 签名成功:', signature);
+        } catch (error) {
+          console.error('ETH 签名失败:', error);
+          // 降级到哈希签名
+          const messageHash = await window.crypto.subtle.digest(
+            'SHA-256',
+            new TextEncoder().encode(messageToSign)
+          );
+          const hashHex = Array.from(new Uint8Array(messageHash))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+          signature = `0x${hashHex.substring(0, 40)}_${myAddress.substring(0, 10)}`;
+        }
+      } else {
+        // BTC 或其他链使用哈希签名
+        const messageHash = await window.crypto.subtle.digest(
+          'SHA-256',
+          new TextEncoder().encode(messageToSign)
+        );
+        const hashHex = Array.from(new Uint8Array(messageHash))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+        signature = `0x${hashHex.substring(0, 40)}_${myAddress.substring(0, 10)}`;
+      }
 
       // 添加签名
       const newSignature = {

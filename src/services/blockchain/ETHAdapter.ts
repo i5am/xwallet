@@ -174,6 +174,30 @@ export class ETHAdapter {
   }
   
   /**
+   * 签名消息（用于多签提案等）
+   */
+  async signMessage(message: string, privateKey: string): Promise<string> {
+    try {
+      const wallet = new ethers.Wallet(privateKey);
+      const signature = await wallet.signMessage(message);
+      return signature;
+    } catch (error) {
+      throw new Error(`Failed to sign message: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
+   * 验证签名
+   */
+  verifyMessage(message: string, signature: string): string {
+    try {
+      return ethers.verifyMessage(message, signature);
+    } catch (error) {
+      throw new Error(`Failed to verify message: ${(error as Error).message}`);
+    }
+  }
+  
+  /**
    * 广播交易
    */
   async broadcastTransaction(signedTx: string): Promise<string> {
