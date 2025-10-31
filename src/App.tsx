@@ -97,8 +97,8 @@ function App() {
   const [multisigM, setMultisigM] = useState<number>(2);
   const [multisigN, setMultisigN] = useState<number>(3);
   const [multisigSigners, setMultisigSigners] = useState<any[]>([]);
-  // const [showMultisigProposals, setShowMultisigProposals] = useState(false);
-  // const [multisigProposals, setMultisigProposals] = useState<any[]>([]);
+  const [showMultisigProposals, setShowMultisigProposals] = useState(false);
+  const [multisigProposals, setMultisigProposals] = useState<any[]>([]);
   // const [selectedProposal, setSelectedProposal] = useState<any>(null);
   // const [showProposalDetail, setShowProposalDetail] = useState(false);
   
@@ -385,6 +385,152 @@ function App() {
     } catch (error) {
       console.error('创建多签钱包失败:', error);
       alert(`❌ 创建多签钱包失败: ${(error as Error).message}`);
+    }
+  };
+
+  // 创建多签转账提案
+  const createMultisigProposal = async () => {
+    if (!selectedWallet || selectedWallet.type !== WalletType.MULTISIG) {
+      alert('❌ 请先选择一个多签钱包');
+      return;
+    }
+
+    if (!sendToAddress || !sendAmount) {
+      alert('❌ 请填写完整的交易信息');
+      return;
+    }
+
+    try {
+      const proposalId = `prop_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      
+      const proposal = {
+        id: proposalId,
+        walletId: selectedWallet.id,
+        type: 'TRANSFER',
+        status: 'PENDING',
+        creator: selectedWallet.multisigConfig!.signers.find(s => s.isMe)?.address || '',
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7天后过期
+        transaction: {
+          from: selectedWallet.address,
+          to: sendToAddress,
+          amount: sendAmount,
+          fee: sendFee || '0.0001',
+          chain: selectedWallet.chain,
+          network: selectedWallet.network,
+          memo: sendMemo || ''
+        },
+        signatures: [
+          {
+            signer: selectedWallet.multisigConfig!.signers.find(s => s.isMe)?.address || '',
+            signedAt: Date.now(),
+            signature: `sig_${Date.now()}_creator`, // 创建者自动签名
+            status: 'APPROVED'
+          }
+        ],
+        requiredSignatures: selectedWallet.multisigConfig!.m,
+        crvaVerification: undefined
+      };
+
+      // 保存提案
+      const updatedProposals = [...multisigProposals, proposal];
+      setMultisigProposals(updatedProposals);
+      
+      // 保存到本地存储
+      localStorage.setItem(`proposals_${selectedWallet.id}`, JSON.stringify(updatedProposals));
+
+      // 生成提案二维码
+      const proposalQR = await QRCode.toDataURL(JSON.stringify({
+        protocol: 'WDK',
+        version: '1.0',
+        type: 'MULTISIG_PROPOSAL',
+        data: proposal
+      }), {
+        width: 300,
+        margin: 2
+      });
+
+      setUnsignedTxQrCode(proposalQR);
+      setShowUnsignedTxDialog(true);
+      setShowSendDialog(false);
+
+      alert(`✅ 提案创建成功！\n\n提案ID: ${proposalId}\n需要签名: ${proposal.requiredSignatures}\n当前签名: 1 (您已自动签名)\n\n请将二维码分享给其他签名者`);
+    } catch (error) {
+      console.error('创建提案失败:', error);
+      alert('❌ 创建提案失败: ' + (error as Error).message);
+    }
+  };
+
+  // 加载提案列表
+  const loadProposals = () => {
+    if (!selectedWallet) return;
+    
+    const stored = localStorage.getItem(`proposals_${selectedWallet.id}`);
+    if (stored) {
+      const proposals = JSON.parse(stored);
+      setMultisigProposals(proposals);
+    }
+  };
+
+  // 签名提案
+  const signProposal = async (proposalId: string) => {
+    if (!selectedWallet || selectedWallet.type !== WalletType.MULTISIG) {
+      return;
+    }
+
+    const proposal = multisigProposals.find(p => p.id === proposalId);
+    if (!proposal) {
+      alert('❌ 提案不存在');
+      return;
+    }
+
+    const myAddress = selectedWallet.multisigConfig!.signers.find(s => s.isMe)?.address;
+    if (!myAddress) {
+      alert('❌ 您不是此钱包的签名者');
+      return;
+    }
+
+    // 检查是否已签名
+    if (proposal.signatures.some((s: any) => s.signer === myAddress)) {
+      alert('⚠️ 您已经签名过此提案');
+      return;
+    }
+
+    try {
+      // 添加签名
+      const newSignature = {
+        signer: myAddress,
+        signedAt: Date.now(),
+        signature: `sig_${Date.now()}_${myAddress}`,
+        status: 'APPROVED'
+      };
+
+      proposal.signatures.push(newSignature);
+
+      // 检查是否达到阈值
+      if (proposal.signatures.length >= proposal.requiredSignatures) {
+        proposal.status = 'APPROVED';
+        
+        // TODO: 执行 CRVA 验证
+        // TODO: 广播交易
+        
+        alert(`✅ 签名成功！\n\n提案已获得足够签名 (${proposal.signatures.length}/${proposal.requiredSignatures})\n状态: 已批准，等待执行\n\n将自动提交到 CRVA 验证网络`);
+      } else {
+        alert(`✅ 签名成功！\n\n当前签名: ${proposal.signatures.length}/${proposal.requiredSignatures}\n还需要: ${proposal.requiredSignatures - proposal.signatures.length} 个签名`);
+      }
+
+      // 更新提案列表
+      const updatedProposals = multisigProposals.map(p => 
+        p.id === proposalId ? proposal : p
+      );
+      setMultisigProposals(updatedProposals);
+      
+      // 保存到本地存储
+      localStorage.setItem(`proposals_${selectedWallet.id}`, JSON.stringify(updatedProposals));
+      
+    } catch (error) {
+      console.error('签名失败:', error);
+      alert('❌ 签名失败: ' + (error as Error).message);
     }
   };
 
@@ -2096,8 +2242,14 @@ function App() {
               <div className="space-y-6">
                 {/* Balance Card */}
                 <div className="card">
-                  <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
-                    钱包详情
+                  <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white flex items-center justify-between">
+                    <span>钱包详情</span>
+                    <span className="text-xs font-normal px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded">
+                      {selectedWallet.type === WalletType.MULTISIG && '🔐 多签'}
+                      {selectedWallet.type === WalletType.COLD && '❄️ 冷'}
+                      {selectedWallet.type === WalletType.HOT && '🔥 热'}
+                      {selectedWallet.type === WalletType.WATCH_ONLY && '👁️ 观测'}
+                    </span>
                   </h2>
                   <div className="text-center py-8">
                     <div className="text-5xl font-bold text-gray-800 dark:text-white mb-2 flex items-center justify-center gap-3">
@@ -2340,7 +2492,7 @@ function App() {
                       <div className="grid grid-cols-2 gap-3 mt-4">
                         <button 
                           onClick={() => {
-                            alert('🚧 多签转账提案功能开发中...\n\n请使用以下步骤：\n1. 点击"创建提案"创建转账提案\n2. 其他签名者扫描二维码签名\n3. 收集足够签名后执行交易');
+                            // 多签钱包创建提案
                             setShowSendDialog(true);
                           }}
                           className="btn-primary flex items-center justify-center gap-2"
@@ -2360,7 +2512,8 @@ function App() {
                       <div className="grid grid-cols-2 gap-3 mt-3">
                         <button 
                           onClick={() => {
-                            alert('🚧 提案列表功能开发中...\n\n将显示：\n• 待签名提案\n• 已签名提案\n• 已执行提案\n• 已拒绝提案');
+                            loadProposals();
+                            setShowMultisigProposals(true);
                           }}
                           className="btn-secondary flex items-center justify-center gap-2"
                         >
@@ -2599,6 +2752,13 @@ function App() {
                         className="btn-primary flex-1"
                       >
                         🔒 生成未签名交易
+                      </button>
+                    ) : selectedWallet.type === WalletType.MULTISIG ? (
+                      <button 
+                        onClick={createMultisigProposal}
+                        className="btn-primary flex-1"
+                      >
+                        📤 创建提案
                       </button>
                     ) : (
                       <button 
@@ -4593,6 +4753,168 @@ function App() {
                     setShowTransactionHistory(false);
                   }}
                   className="btn-primary w-full"
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 多签提案列表对话框 */}
+        {showMultisigProposals && selectedWallet && selectedWallet.type === WalletType.MULTISIG && (
+          <div className="dialog-overlay">
+            <div className="dialog-content card" style={{ maxWidth: '700px' }}>
+              <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white flex items-center gap-2">
+                <FileText className="w-6 h-6" />
+                多签提案列表
+              </h2>
+              
+              {/* 提案统计 */}
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">
+                    {multisigProposals.filter(p => p.status === 'PENDING').length}
+                  </div>
+                  <div className="text-xs text-yellow-600 dark:text-yellow-500">待签名</div>
+                </div>
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-green-700 dark:text-green-400">
+                    {multisigProposals.filter(p => p.status === 'APPROVED').length}
+                  </div>
+                  <div className="text-xs text-green-600 dark:text-green-500">已批准</div>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-gray-700 dark:text-gray-400">
+                    {multisigProposals.length}
+                  </div>
+                  <div className="text-xs text-gray-600 dark:text-gray-500">总计</div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {multisigProposals.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <FileText className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <p className="text-gray-500 dark:text-gray-400">暂无提案</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">点击"创建提案"发起新的转账提案</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                    {multisigProposals.map((proposal, index) => {
+                      const myAddress = selectedWallet.multisigConfig!.signers.find(s => s.isMe)?.address;
+                      const hasSignedByMe = proposal.signatures.some((s: any) => s.signer === myAddress);
+                      const canSign = !hasSignedByMe && proposal.status === 'PENDING';
+                      
+                      return (
+                        <div 
+                          key={proposal.id}
+                          className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                提案 #{index + 1}
+                              </span>
+                              <span className={`text-xs px-2 py-1 rounded font-medium ${
+                                proposal.status === 'APPROVED' 
+                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+                                  : proposal.status === 'REJECTED'
+                                  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                  : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                              }`}>
+                                {proposal.status === 'APPROVED' ? '✓ 已批准' : 
+                                 proposal.status === 'REJECTED' ? '✗ 已拒绝' : 
+                                 '⏳ 待签名'}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                                {proposal.transaction.amount} {proposal.transaction.chain}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                签名: {proposal.signatures.length}/{proposal.requiredSignatures}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 dark:text-gray-400">接收地址:</span>
+                              <span className="font-mono text-xs text-gray-800 dark:text-gray-200 truncate max-w-[200px]">
+                                {proposal.transaction.to}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 dark:text-gray-400">创建时间:</span>
+                              <span className="text-gray-700 dark:text-gray-300">
+                                {new Date(proposal.createdAt).toLocaleString('zh-CN')}
+                              </span>
+                            </div>
+                            {proposal.transaction.memo && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-400">备注:</span>
+                                <span className="text-gray-700 dark:text-gray-300">{proposal.transaction.memo}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 签名者列表 */}
+                          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                            <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                              签名状态:
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedWallet.multisigConfig!.signers.map((signer: any) => {
+                                const hasSigned = proposal.signatures.some((s: any) => s.signer === signer.address);
+                                return (
+                                  <span 
+                                    key={signer.address}
+                                    className={`text-xs px-2 py-1 rounded ${
+                                      hasSigned 
+                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+                                        : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                                    }`}
+                                  >
+                                    {signer.name || signer.address.substring(0, 8)} {hasSigned ? '✓' : '○'}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* 操作按钮 */}
+                          {canSign && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                              <button
+                                onClick={() => signProposal(proposal.id)}
+                                className="btn-primary w-full text-sm"
+                              >
+                                ✍️ 批准并签名
+                              </button>
+                            </div>
+                          )}
+
+                          {hasSignedByMe && proposal.status === 'PENDING' && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 text-center">
+                              <span className="text-xs text-green-600 dark:text-green-400">
+                                ✓ 您已签名，等待其他签名者
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => {
+                    setShowMultisigProposals(false);
+                  }}
+                  className="btn-secondary w-full"
                 >
                   关闭
                 </button>

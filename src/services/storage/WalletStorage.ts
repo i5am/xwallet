@@ -20,6 +20,8 @@ export class WalletStorage {
         type: wallet.type,
         network: wallet.network,
         createdAt: wallet.createdAt,
+        // 多签钱包配置
+        multisigConfig: wallet.multisigConfig,
         // 私钥和助记词加密后保存
         encryptedPrivateKey: wallet.privateKey ? this.encryptData(wallet.privateKey) : undefined,
         encryptedMnemonic: wallet.mnemonic ? this.encryptData(wallet.mnemonic) : undefined,
