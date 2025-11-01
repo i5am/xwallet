@@ -99,6 +99,7 @@ function App() {
   const [multisigSigners, setMultisigSigners] = useState<any[]>([]);
   const [showMultisigProposals, setShowMultisigProposals] = useState(false);
   const [multisigProposals, setMultisigProposals] = useState<any[]>([]);
+  const [proposalQRCodes, setProposalQRCodes] = useState<{[key: string]: string}>({});
   // const [selectedProposal, setSelectedProposal] = useState<any>(null);
   // const [showProposalDetail, setShowProposalDetail] = useState(false);
   
@@ -519,14 +520,41 @@ function App() {
   };
 
   // 加载提案列表
-  const loadProposals = () => {
+  const loadProposals = async () => {
     if (!selectedWallet) return;
     
     const stored = localStorage.getItem(`proposals_${selectedWallet.id}`);
     if (stored) {
       const proposals = JSON.parse(stored);
       setMultisigProposals(proposals);
+      
+      // 为每个提案生成二维码
+      await generateProposalQRCodes(proposals);
     }
+  };
+
+  // 生成提案二维码
+  const generateProposalQRCodes = async (proposals: any[]) => {
+    const qrCodes: {[key: string]: string} = {};
+    
+    for (const proposal of proposals) {
+      try {
+        const qrData = await QRCode.toDataURL(JSON.stringify({
+          protocol: 'WDK',
+          version: '1.0',
+          type: 'MULTISIG_PROPOSAL',
+          data: proposal
+        }), {
+          width: 200,
+          margin: 1
+        });
+        qrCodes[proposal.id] = qrData;
+      } catch (error) {
+        console.error('生成二维码失败:', error);
+      }
+    }
+    
+    setProposalQRCodes(qrCodes);
   };
 
   // 签名提案
@@ -5080,6 +5108,27 @@ function App() {
                               })}
                             </div>
                           </div>
+
+                          {/* 提案二维码 */}
+                          {proposalQRCodes[proposal.id] && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                              <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 text-center">
+                                📱 扫描此码导入提案
+                              </div>
+                              <div className="flex justify-center">
+                                <div className="bg-white p-2 rounded-lg border-2 border-indigo-300 dark:border-indigo-600">
+                                  <img 
+                                    src={proposalQRCodes[proposal.id]} 
+                                    alt="提案二维码" 
+                                    className="w-32 h-32"
+                                  />
+                                </div>
+                              </div>
+                              <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
+                                其他签名者扫描后可查看并签名
+                              </p>
+                            </div>
+                          )}
 
                           {/* 操作按钮 */}
                           {canSign && (
