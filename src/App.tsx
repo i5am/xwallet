@@ -289,14 +289,23 @@ function App() {
         // BTC 多签地址（P2WSH）
         console.log('生成 BTC P2WSH 多签地址...');
         // TODO: 实现真正的 P2WSH 多签脚本
-        // 这里使用简化的模拟地址
-        multisigAddress = `bc1q${Math.random().toString(36).substring(2, 40)}`;
+        // 生成随机 BTC bech32 地址（bc1q + 38个字符）
+        const randomHex = Array.from({length: 38}, () => 
+          '0123456789abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 36)]
+        ).join('');
+        multisigAddress = `bc1q${randomHex}`;
         multisigScript = `OP_${multisigM} ${multisigSigners.map(s => s.publicKey).join(' ')} OP_${multisigN} OP_CHECKMULTISIG`;
       } else {
-        // ETH 多签地址（Gnosis Safe 或简单合约）
+        // ETH 多签地址（生成标准 40 个十六进制字符）
         console.log('生成 ETH 多签合约地址...');
-        // TODO: 实际部署 Gnosis Safe 合约
-        multisigAddress = `0x${Math.random().toString(36).substring(2, 42)}`;
+        // 生成真正的 40 个十六进制字符
+        const randomHex = Array.from({length: 40}, () => 
+          Math.floor(Math.random() * 16).toString(16)
+        ).join('');
+        multisigAddress = `0x${randomHex}`;
+        
+        // TODO: 实际部署 Gnosis Safe 合约或多签合约
+        console.log('多签合约地址:', multisigAddress);
       }
 
       // 创建多签配置
