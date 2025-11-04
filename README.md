@@ -11,7 +11,7 @@
 
 支持 **Bitcoin (Taproot)** 和 **Ethereum (含 ERC20)**
 
-[快速开始](#-快速开始) • [功能特性](#-核心特性) • [WDK协议](docs/protocol.md) • [二维码格式](docs/QR-CODE-FORMATS.md)
+[快速开始](#-快速开始) • [功能特性](#-核心特性) • [文档索引](DOCS_INDEX.md) • [WDK协议](docs/protocol.md) • [二维码格式](docs/QR-CODE-FORMATS.md)
 
 </div>
 
