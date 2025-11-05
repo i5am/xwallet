@@ -5,7 +5,7 @@
 
 import { CRVAConfig, CRVANode, CRVANodeStatus, CRVAVerification } from '../../types/wallet';
 import { API_CONFIG, createApiUrl, API_ENDPOINTS, apiLogger } from '../../config/api';
-import { nodeDiscovery, NodeDiscoveryService } from './NodeDiscovery';
+import { nodeDiscovery } from './NodeDiscovery';
 
 export class CRVAService {
   private config: CRVAConfig;
@@ -250,6 +250,17 @@ export class CRVAService {
  */
 export async function createDefaultCRVAConfig(): Promise<CRVAConfig> {
   console.log('🔍 开始去中心化节点发现...');
+  
+  // 设置全局 API_CONFIG（供节点发现服务使用）
+  if (typeof window !== 'undefined') {
+    (window as any).API_CONFIG = API_CONFIG;
+  }
+  
+  // 配置节点发现服务使用合约地址
+  if (API_CONFIG.contracts.nodeRegistry && !nodeDiscovery['config'].contractAddress) {
+    nodeDiscovery['config'].contractAddress = API_CONFIG.contracts.nodeRegistry;
+    console.log('📝 节点发现服务已配置合约地址:', API_CONFIG.contracts.nodeRegistry);
+  }
   
   // 启动节点发现服务
   await nodeDiscovery.start();

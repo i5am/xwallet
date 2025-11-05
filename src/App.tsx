@@ -103,6 +103,12 @@ function App() {
   // const [selectedProposal, setSelectedProposal] = useState<any>(null);
   // const [showProposalDetail, setShowProposalDetail] = useState(false);
   
+  // 环境配置状态
+  const [networkEnvironment, setNetworkEnvironment] = useState<'local' | 'public'>(() => {
+    const saved = localStorage.getItem('network_environment');
+    return (saved as 'local' | 'public') || 'local';
+  });
+  
   // 摄像头相关 refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -3604,6 +3610,81 @@ function App() {
               </div>
 
               <div className="space-y-4">
+                {/* 网络环境设置 */}
+                <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                    <Settings className="w-4 h-4 inline mr-2" />
+                    CRVA 网络环境
+                  </label>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* 本地环境 */}
+                    <button
+                      onClick={() => {
+                        setNetworkEnvironment('local');
+                        localStorage.setItem('network_environment', 'local');
+                        alert('✅ 已切换到本地环境\n\n将使用本地 CRVA 节点服务\nAPI: http://localhost:3000\nWebSocket: ws://localhost:3001');
+                      }}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        networkEnvironment === 'local'
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-lg'
+                          : 'border-gray-300 dark:border-gray-600 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'
+                      }`}
+                    >
+                      <div className="text-center">
+                        <div className="text-3xl mb-2">💻</div>
+                        <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                          本地环境
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          开发测试
+                        </div>
+                      </div>
+                    </button>
+                    
+                    {/* 公网环境 */}
+                    <button
+                      onClick={() => {
+                        setNetworkEnvironment('public');
+                        localStorage.setItem('network_environment', 'public');
+                        alert('✅ 已切换到公网环境\n\n将使用去中心化节点发现\n通过智能合约、DNS、Bootstrap 节点自动发现 CRVA 验证节点');
+                      }}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        networkEnvironment === 'public'
+                          ? 'border-green-500 bg-green-50 dark:bg-green-900/20 shadow-lg'
+                          : 'border-gray-300 dark:border-gray-600 hover:bg-green-50/50 dark:hover:bg-green-900/10'
+                      }`}
+                    >
+                      <div className="text-center">
+                        <div className="text-3xl mb-2">🌐</div>
+                        <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                          公网环境
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          去中心化
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                  
+                  <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-xs text-gray-600 dark:text-gray-400">
+                    <div className="font-semibold mb-1">当前环境说明：</div>
+                    {networkEnvironment === 'local' ? (
+                      <>
+                        <div>• 使用本地 CRVA 节点服务</div>
+                        <div>• 适合开发和测试</div>
+                        <div>• 需要运行本地服务器</div>
+                      </>
+                    ) : (
+                      <>
+                        <div>• 自动发现 CRVA 验证节点</div>
+                        <div>• 完全去中心化</div>
+                        <div>• 适合生产环境</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                
                 {/* 钱包模式切换 */}
                 {selectedWallet && (
                   <div>

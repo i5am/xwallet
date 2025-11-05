@@ -177,16 +177,43 @@ export class NodeDiscoveryService {
         return [];
       }
 
-      // 这里应该调用智能合约的 getRegisteredNodes() 方法
-      // 例如使用 ethers.js 或 web3.js
-      console.log('📡 从智能合约读取注册节点...');
+      console.log('📡 从智能合约读取注册节点...', this.config.contractAddress);
       
-      // 示例代码（需要根据实际合约实现）:
-      // const contract = new ethers.Contract(this.config.contractAddress, ABI, provider);
-      // const nodes = await contract.getRegisteredNodes();
-      // return nodes.map(node => this.parseContractNode(node));
-
-      return [];
+      // 使用 ethers.js 从合约读取节点
+      const { ethers } = await import('ethers');
+      
+      // 连接到 RPC 节点
+      const rpcUrl = (window as any).API_CONFIG?.ethRpcUrl || 'http://localhost:8545';
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      
+      // 合约 ABI（只需要我们使用的函数）
+      const contractABI = [
+        "function getActiveNodes() external view returns (tuple(address owner, string endpoint, bytes32 publicKey, uint256 stake, uint256 reputation, uint256 registeredAt, uint256 lastHeartbeat, bool active)[] memory)",
+        "function getActiveNodeCount() external view returns (uint256)"
+      ];
+      
+      // 创建合约实例
+      const contract = new ethers.Contract(
+        this.config.contractAddress,
+        contractABI,
+        provider
+      );
+      
+      // 读取活跃节点
+      const nodes = await contract.getActiveNodes();
+      
+      console.log(`✅ 从区块链读取到 ${nodes.length} 个活跃节点`);
+      
+      // 转换为 CRVANode 格式
+      return nodes.map((node: any, index: number) => ({
+        id: `chain_node_${index + 1}`,
+        endpoint: node.endpoint,
+        publicKey: node.publicKey,
+        status: node.active ? 'active' as const : 'offline' as const,
+        lastActive: Number(node.lastHeartbeat) * 1000,
+        reputation: Number(node.reputation)
+      }));
+      
     } catch (error) {
       console.error('从区块链发现节点失败:', error);
       return [];
@@ -389,4 +416,15 @@ export class NodeDiscoveryService {
 /**
  * 全局节点发现服务实例
  */
-export const nodeDiscovery = new NodeDiscoveryService();
+export const nodeDiscovery = new NodeDiscoveryService({
+  methods: [
+    DiscoveryMethod.BLOCKCHAIN,   // 优先从区块链
+    DiscoveryMethod.BOOTSTRAP,     // 其次 Bootstrap
+    DiscoveryMethod.MDNS          // 最后本地网络
+  ],
+  contractAddress: typeof window !== 'undefined' && (window as any).API_CONFIG?.contracts?.nodeRegistry,
+  bootstrapNodes: [],
+  dnsSeeds: [],
+  maxNodes: 100,
+  refreshInterval: 60000
+});
