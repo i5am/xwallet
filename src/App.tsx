@@ -13,7 +13,8 @@ import { ProtocolUtils } from './utils/protocol';
 import { WalletStorage } from './services/storage/WalletStorage';
 import { PasswordService } from './services/storage/PasswordService';
 import { CRVAService, createDefaultCRVAConfig } from './services/crva/CRVAService';
-import { Wallet as WalletIcon, Plus, ArrowUpRight, ArrowDownLeft, Settings, Zap, X, Camera, QrCode as QrCodeIcon, Lock, Eye, EyeOff, Trash2, FileText } from 'lucide-react';
+import { walletConnectService } from './services/walletconnect/WalletConnectService';
+import { Wallet as WalletIcon, Plus, ArrowUpRight, ArrowDownLeft, Settings, Zap, X, Camera, QrCode as QrCodeIcon, Lock, Eye, EyeOff, Trash2, FileText, Link as LinkIcon } from 'lucide-react';
 
 function App() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -109,6 +110,13 @@ function App() {
     return (saved as 'local' | 'public') || 'local';
   });
   
+  // WalletConnect 状态
+  const [showWalletConnectDialog, setShowWalletConnectDialog] = useState(false);
+  const [wcSessionProposal, setWcSessionProposal] = useState<any>(null);
+  const [wcPendingRequest, setWcPendingRequest] = useState<any>(null);
+  const [wcActiveSessions, setWcActiveSessions] = useState<any[]>([]);
+  const [wcInitialized, setWcInitialized] = useState(false);
+  
   // 摄像头相关 refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -126,7 +134,141 @@ function App() {
       setSelectedWallet(loadedWallets[0]);
       console.log(`✅ 已加载 ${loadedWallets.length} 个钱包`);
     }
+    
+    // 初始化 WalletConnect
+    initializeWalletConnect();
   }, []);
+  
+  // 初始化 WalletConnect
+  const initializeWalletConnect = async () => {
+    if (wcInitialized) return;
+    
+    try {
+      await walletConnectService.initialize();
+      
+      // 注册事件监听
+      walletConnectService.onSessionProposal((proposal) => {
+        console.log('📨 收到会话提案:', proposal);
+        setWcSessionProposal(proposal);
+      });
+      
+      walletConnectService.onSessionRequest((request) => {
+        console.log('📨 收到会话请求:', request);
+        setWcPendingRequest(request);
+      });
+      
+      walletConnectService.onSessionDelete((topic) => {
+        console.log('❌ 会话已删除:', topic);
+        updateActiveSessions();
+      });
+      
+      setWcInitialized(true);
+      updateActiveSessions();
+      console.log('✅ WalletConnect 初始化成功');
+    } catch (error) {
+      console.error('❌ WalletConnect 初始化失败:', error);
+    }
+  };
+  
+  // 更新活跃会话列表
+  const updateActiveSessions = () => {
+    const sessions = walletConnectService.getActiveSessions();
+    setWcActiveSessions(sessions);
+  };
+  
+  // 扫描 WalletConnect URI
+  const handleWalletConnectScan = () => {
+    setShowInputScanDialog(true);
+    setScanInputTitle('扫描 WalletConnect 二维码');
+    setScanInputCallback(() => async (uri: string) => {
+      if (uri.startsWith('wc:')) {
+        try {
+          await walletConnectService.pair(uri);
+          setShowInputScanDialog(false);
+          alert('✅ 配对成功！等待 DApp 连接请求...');
+        } catch (error) {
+          console.error('❌ 配对失败:', error);
+          alert(`❌ 配对失败: ${(error as Error).message}`);
+        }
+      } else {
+        alert('❌ 无效的 WalletConnect URI');
+      }
+    });
+  };
+  
+  // 批准会话
+  const approveWalletConnectSession = async () => {
+    if (!wcSessionProposal || !selectedWallet) return;
+    
+    if (selectedWallet.type !== WalletType.HOT) {
+      alert('❌ 只有热钱包可以连接 DApp');
+      return;
+    }
+    
+    try {
+      await walletConnectService.approveSession(wcSessionProposal, selectedWallet);
+      setWcSessionProposal(null);
+      updateActiveSessions();
+      alert('✅ 会话已批准！DApp 已连接');
+    } catch (error) {
+      console.error('❌ 批准会话失败:', error);
+      alert(`❌ 批准会话失败: ${(error as Error).message}`);
+    }
+  };
+  
+  // 拒绝会话
+  const rejectWalletConnectSession = async () => {
+    if (!wcSessionProposal) return;
+    
+    try {
+      await walletConnectService.rejectSession(wcSessionProposal);
+      setWcSessionProposal(null);
+      alert('✅ 会话已拒绝');
+    } catch (error) {
+      console.error('❌ 拒绝会话失败:', error);
+      alert(`❌ 拒绝会话失败: ${(error as Error).message}`);
+    }
+  };
+  
+  // 处理会话请求
+  const approveWalletConnectRequest = async () => {
+    if (!wcPendingRequest || !selectedWallet) return;
+    
+    try {
+      await walletConnectService.handleSessionRequest(wcPendingRequest, selectedWallet);
+      setWcPendingRequest(null);
+      alert('✅ 请求已批准');
+    } catch (error) {
+      console.error('❌ 请求处理失败:', error);
+      alert(`❌ 请求处理失败: ${(error as Error).message}`);
+    }
+  };
+  
+  // 拒绝会话请求
+  const rejectWalletConnectRequest = async () => {
+    if (!wcPendingRequest) return;
+    
+    try {
+      await walletConnectService.rejectSessionRequest(wcPendingRequest);
+      setWcPendingRequest(null);
+      alert('✅ 请求已拒绝');
+    } catch (error) {
+      console.error('❌ 拒绝请求失败:', error);
+      alert(`❌ 拒绝请求失败: ${(error as Error).message}`);
+    }
+  };
+  
+  // 断开会话
+  const disconnectWalletConnectSession = async (topic: string) => {
+    try {
+      await walletConnectService.disconnectSession(topic);
+      updateActiveSessions();
+      alert('✅ 会话已断开');
+    } catch (error) {
+      console.error('❌ 断开会话失败:', error);
+      alert(`❌ 断开会话失败: ${(error as Error).message}`);
+    }
+  };
 
   // 生成接收地址二维码 (支持简单格式和协议格式)
   useEffect(() => {
@@ -2373,13 +2515,22 @@ function App() {
                 </p>
               </div>
             </div>
-            <button 
-              onClick={() => setShowSettingsDialog(true)}
-              className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2"
-            >
-              <Settings className="w-5 h-5" />
-              设置
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setShowWalletConnectDialog(true)}
+                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+              >
+                <LinkIcon className="w-5 h-5" />
+                WalletConnect
+              </button>
+              <button 
+                onClick={() => setShowSettingsDialog(true)}
+                className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+              >
+                <Settings className="w-5 h-5" />
+                设置
+              </button>
+            </div>
           </div>
         </header>
 
@@ -5672,6 +5823,275 @@ function App() {
                     }`}
                   >
                     🔐 创建多签钱包
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* WalletConnect 对话框 */}
+        {showWalletConnectDialog && (
+          <div className="dialog-overlay">
+            <div className="dialog max-w-2xl">
+              <div className="dialog-header">
+                <h3 className="text-xl font-bold">WalletConnect</h3>
+                <button onClick={() => setShowWalletConnectDialog(false)}>
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="dialog-body space-y-6">
+                {/* 扫描二维码 */}
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <QrCodeIcon className="w-5 h-5" />
+                    连接 DApp
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    扫描 DApp 上的 WalletConnect 二维码
+                  </p>
+                  <button
+                    onClick={handleWalletConnectScan}
+                    className="w-full bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-lg flex items-center justify-center gap-2"
+                  >
+                    <Camera className="w-5 h-5" />
+                    扫描 WalletConnect 二维码
+                  </button>
+                </div>
+                
+                {/* 当前钱包 */}
+                {selectedWallet && (
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">当前钱包</p>
+                        <p className="font-semibold text-gray-900 dark:text-white mt-1">
+                          {selectedWallet.name}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-1">
+                          {formatAddress(selectedWallet.address)}
+                        </p>
+                      </div>
+                      <div className={`px-3 py-1 rounded text-sm ${
+                        selectedWallet.type === WalletType.HOT 
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                      }`}>
+                        {selectedWallet.type === WalletType.HOT ? '热钱包' : selectedWallet.type}
+                      </div>
+                    </div>
+                    {selectedWallet.type !== WalletType.HOT && (
+                      <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
+                        ⚠️ 只有热钱包可以连接 DApp
+                      </p>
+                    )}
+                  </div>
+                )}
+                
+                {/* 活跃会话列表 */}
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-gray-900 dark:text-white flex items-center justify-between">
+                    <span>活跃会话</span>
+                    <span className="text-sm font-normal text-gray-500">
+                      {wcActiveSessions.length} 个连接
+                    </span>
+                  </h4>
+                  
+                  {wcActiveSessions.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                      <LinkIcon className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                      <p>暂无活跃会话</p>
+                      <p className="text-sm mt-1">扫描 DApp 二维码开始连接</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {wcActiveSessions.map((session) => (
+                        <div key={session.topic} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                          <div className="flex items-start gap-3">
+                            {session.peer.metadata.icons[0] && (
+                              <img 
+                                src={session.peer.metadata.icons[0]} 
+                                alt="" 
+                                className="w-10 h-10 rounded"
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <h5 className="font-semibold text-gray-900 dark:text-white">
+                                {session.peer.metadata.name}
+                              </h5>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                {session.peer.metadata.url}
+                              </p>
+                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                连接时间: {new Date(session.expiry * 1000).toLocaleString()}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => disconnectWalletConnectSession(session.topic)}
+                              className="text-red-500 hover:text-red-700 px-3 py-1 text-sm border border-red-500 rounded"
+                            >
+                              断开
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* 会话提案对话框 */}
+        {wcSessionProposal && (
+          <div className="dialog-overlay">
+            <div className="dialog max-w-lg">
+              <div className="dialog-header">
+                <h3 className="text-xl font-bold">连接请求</h3>
+              </div>
+              
+              <div className="dialog-body space-y-4">
+                {/* DApp 信息 */}
+                <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  {wcSessionProposal.params.proposer.metadata.icons[0] && (
+                    <img 
+                      src={wcSessionProposal.params.proposer.metadata.icons[0]} 
+                      alt="" 
+                      className="w-16 h-16 rounded"
+                    />
+                  )}
+                  <div>
+                    <h4 className="font-semibold text-gray-900 dark:text-white">
+                      {wcSessionProposal.params.proposer.metadata.name}
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {wcSessionProposal.params.proposer.metadata.url}
+                    </p>
+                  </div>
+                </div>
+                
+                {/* 描述 */}
+                {wcSessionProposal.params.proposer.metadata.description && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {wcSessionProposal.params.proposer.metadata.description}
+                  </p>
+                )}
+                
+                {/* 请求的权限 */}
+                <div className="space-y-2">
+                  <h5 className="font-semibold text-gray-900 dark:text-white">请求权限:</h5>
+                  <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded text-sm space-y-1">
+                    <p className="text-gray-700 dark:text-gray-300">✓ 查看账户地址</p>
+                    <p className="text-gray-700 dark:text-gray-300">✓ 请求签名</p>
+                    <p className="text-gray-700 dark:text-gray-300">✓ 发送交易</p>
+                  </div>
+                </div>
+                
+                {/* 使用的钱包 */}
+                {selectedWallet && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">将使用钱包:</p>
+                    <p className="font-semibold text-gray-900 dark:text-white mt-1">
+                      {selectedWallet.name} ({formatAddress(selectedWallet.address)})
+                    </p>
+                  </div>
+                )}
+                
+                {/* 操作按钮 */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={rejectWalletConnectSession}
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white p-3 rounded transition-colors"
+                  >
+                    拒绝
+                  </button>
+                  <button
+                    onClick={approveWalletConnectSession}
+                    disabled={!selectedWallet || selectedWallet.type !== WalletType.HOT}
+                    className={`flex-1 p-3 rounded transition-colors ${
+                      selectedWallet && selectedWallet.type === WalletType.HOT
+                        ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                        : 'bg-gray-300 dark:bg-gray-600 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    批准连接
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* 会话请求对话框 */}
+        {wcPendingRequest && (
+          <div className="dialog-overlay">
+            <div className="dialog max-w-lg">
+              <div className="dialog-header">
+                <h3 className="text-xl font-bold">签名请求</h3>
+              </div>
+              
+              <div className="dialog-body space-y-4">
+                {/* DApp 信息 */}
+                <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  {wcPendingRequest.peerIcon && (
+                    <img 
+                      src={wcPendingRequest.peerIcon} 
+                      alt="" 
+                      className="w-12 h-12 rounded"
+                    />
+                  )}
+                  <div>
+                    <h4 className="font-semibold text-gray-900 dark:text-white">
+                      {wcPendingRequest.peerName}
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {wcPendingRequest.peerUrl}
+                    </p>
+                  </div>
+                </div>
+                
+                {/* 请求方法 */}
+                <div className="space-y-2">
+                  <h5 className="font-semibold text-gray-900 dark:text-white">请求类型:</h5>
+                  <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
+                    <code className="text-sm text-blue-600 dark:text-blue-400">
+                      {wcPendingRequest.method}
+                    </code>
+                  </div>
+                </div>
+                
+                {/* 请求数据 */}
+                <div className="space-y-2">
+                  <h5 className="font-semibold text-gray-900 dark:text-white">请求数据:</h5>
+                  <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded max-h-48 overflow-auto">
+                    <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-all">
+                      {JSON.stringify(wcPendingRequest.params, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+                
+                {/* 警告 */}
+                <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 p-3 rounded">
+                  <p className="text-sm text-orange-800 dark:text-orange-300">
+                    ⚠️ 请仔细检查请求内容。签名后将无法撤销。
+                  </p>
+                </div>
+                
+                {/* 操作按钮 */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={rejectWalletConnectRequest}
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white p-3 rounded transition-colors"
+                  >
+                    拒绝
+                  </button>
+                  <button
+                    onClick={approveWalletConnectRequest}
+                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white p-3 rounded transition-colors"
+                  >
+                    批准签名
                   </button>
                 </div>
               </div>
