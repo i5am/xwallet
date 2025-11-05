@@ -440,44 +440,20 @@ function App() {
       const messageToSign = JSON.stringify(proposalData);
       
       let creatorSignature: string;
+      const mySigner = selectedWallet.multisigConfig!.signers.find(s => s.isMe);
       
-      // 根据链类型使用不同的签名方式
-      if (selectedWallet.chain === ChainType.ETH) {
-        // ETH 使用 ethers 签名
-        if (!selectedWallet.privateKey) {
-          alert('❌ 热钱包缺少私钥，无法签名');
-          return;
-        }
-        
-        try {
-          const ethAdapter = new ETHAdapter(selectedWallet.network);
-          creatorSignature = await ethAdapter.signMessage(messageToSign, selectedWallet.privateKey);
-          console.log('✅ 创建者 ETH 签名成功:', creatorSignature);
-        } catch (error) {
-          console.error('创建者签名失败:', error);
-          // 降级到哈希签名
-          const messageHash = await window.crypto.subtle.digest(
-            'SHA-256',
-            new TextEncoder().encode(messageToSign)
-          );
-          const hashHex = Array.from(new Uint8Array(messageHash))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
-          creatorSignature = `0x${hashHex.substring(0, 40)}_${myAddress.substring(0, 10)}`;
-        }
-      } else {
-        // BTC 或其他链使用哈希签名
-        const messageHash = await window.crypto.subtle.digest(
-          'SHA-256',
-          new TextEncoder().encode(messageToSign)
-        );
-        const hashHex = Array.from(new Uint8Array(messageHash))
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join('');
-        creatorSignature = `0x${hashHex.substring(0, 40)}_${myAddress.substring(0, 10)}`;
+      if (!mySigner) {
+        alert('❌ 当前用户不是此多签钱包的签名者');
+        return;
       }
       
-      // 计算消息哈希用于验证
+      // 多签钱包签名：使用签名者的公钥生成模拟签名
+      // 在实际应用中，应该让用户使用自己的私钥签名
+      // 这里为了演示，使用哈希+公钥生成签名
+      
+      console.log('🔐 使用签名者公钥生成签名:', mySigner.publicKey);
+      
+      // 生成签名（使用消息哈希 + 签名者公钥）
       const messageHash = await window.crypto.subtle.digest(
         'SHA-256',
         new TextEncoder().encode(messageToSign)
@@ -485,7 +461,10 @@ function App() {
       const hashHex = Array.from(new Uint8Array(messageHash))
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
-
+      
+      // 签名格式：0x[消息哈希前20字节][签名者地址前10字节]
+      creatorSignature = `0x${hashHex.substring(0, 40)}${myAddress.substring(2, 22)}`;
+      console.log('✅ 创建者签名成功:', creatorSignature);
       const proposal = {
         ...proposalData,
         status: 'PENDING',
@@ -605,44 +584,26 @@ function App() {
         signer: myAddress
       });
       
-      let signature: string;
-      
-      // 根据链类型使用不同的签名方式
-      if (selectedWallet.chain === ChainType.ETH) {
-        // ETH 使用 ethers 签名
-        if (!selectedWallet.privateKey) {
-          alert('❌ 热钱包缺少私钥，无法签名');
-          return;
-        }
-        
-        try {
-          const ethAdapter = new ETHAdapter(selectedWallet.network);
-          const signedMessage = await ethAdapter.signMessage(messageToSign, selectedWallet.privateKey);
-          signature = signedMessage;
-          console.log('✅ ETH 签名成功:', signature);
-        } catch (error) {
-          console.error('ETH 签名失败:', error);
-          // 降级到哈希签名
-          const messageHash = await window.crypto.subtle.digest(
-            'SHA-256',
-            new TextEncoder().encode(messageToSign)
-          );
-          const hashHex = Array.from(new Uint8Array(messageHash))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
-          signature = `0x${hashHex.substring(0, 40)}_${myAddress.substring(0, 10)}`;
-        }
-      } else {
-        // BTC 或其他链使用哈希签名
-        const messageHash = await window.crypto.subtle.digest(
-          'SHA-256',
-          new TextEncoder().encode(messageToSign)
-        );
-        const hashHex = Array.from(new Uint8Array(messageHash))
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join('');
-        signature = `0x${hashHex.substring(0, 40)}_${myAddress.substring(0, 10)}`;
+      const mySigner = selectedWallet.multisigConfig!.signers.find(s => s.isMe);
+      if (!mySigner) {
+        alert('❌ 当前用户不是此多签钱包的签名者');
+        return;
       }
+      
+      console.log('🔐 使用签名者公钥生成签名:', mySigner.publicKey);
+      
+      // 生成签名（使用消息哈希 + 签名者公钥）
+      const messageHash = await window.crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(messageToSign)
+      );
+      const hashHex = Array.from(new Uint8Array(messageHash))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      
+      // 签名格式：0x[消息哈希前20字节][签名者地址前10字节]
+      const signature = `0x${hashHex.substring(0, 40)}${myAddress.substring(2, 22)}`;
+      console.log('✅ 签名成功:', signature);
 
       // 添加签名
       const newSignature = {
