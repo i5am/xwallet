@@ -175,8 +175,13 @@ function App() {
   
   // 更新活跃会话列表
   const updateActiveSessions = () => {
-    const sessions = walletConnectService.getActiveSessions();
-    setWcActiveSessions(sessions);
+    try {
+      const sessions = walletConnectService.getActiveSessions();
+      setWcActiveSessions(sessions || []);
+    } catch (error) {
+      console.error('❌ 获取活跃会话失败:', error);
+      setWcActiveSessions([]);
+    }
   };
   
   // 扫描 WalletConnect URI
@@ -5897,11 +5902,11 @@ function App() {
                   <h4 className="font-semibold text-gray-900 dark:text-white flex items-center justify-between">
                     <span>活跃会话</span>
                     <span className="text-sm font-normal text-gray-500">
-                      {wcActiveSessions.length} 个连接
+                      {wcActiveSessions?.length || 0} 个连接
                     </span>
                   </h4>
                   
-                  {wcActiveSessions.length === 0 ? (
+                  {!wcActiveSessions || wcActiveSessions.length === 0 ? (
                     <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                       <LinkIcon className="w-12 h-12 mx-auto mb-2 opacity-30" />
                       <p>暂无活跃会话</p>
@@ -5912,7 +5917,7 @@ function App() {
                       {wcActiveSessions.map((session) => (
                         <div key={session.topic} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
                           <div className="flex items-start gap-3">
-                            {session.peer.metadata.icons[0] && (
+                            {session?.peer?.metadata?.icons?.[0] && (
                               <img 
                                 src={session.peer.metadata.icons[0]} 
                                 alt="" 
@@ -5921,13 +5926,13 @@ function App() {
                             )}
                             <div className="flex-1 min-w-0">
                               <h5 className="font-semibold text-gray-900 dark:text-white">
-                                {session.peer.metadata.name}
+                                {session?.peer?.metadata?.name || 'Unknown DApp'}
                               </h5>
                               <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                {session.peer.metadata.url}
+                                {session?.peer?.metadata?.url || ''}
                               </p>
                               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                连接时间: {new Date(Number(session.expiry) * 1000).toLocaleString()}
+                                连接时间: {session?.expiry ? new Date(Number(session.expiry) * 1000).toLocaleString() : '未知'}
                               </p>
                             </div>
                             <button
