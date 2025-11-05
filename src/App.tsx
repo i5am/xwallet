@@ -144,6 +144,7 @@ function App() {
     if (wcInitialized) return;
     
     try {
+      console.log('🔄 开始初始化 WalletConnect...');
       await walletConnectService.initialize();
       
       // 注册事件监听
@@ -167,6 +168,8 @@ function App() {
       console.log('✅ WalletConnect 初始化成功');
     } catch (error) {
       console.error('❌ WalletConnect 初始化失败:', error);
+      // 不阻止应用启动
+      console.warn('⚠️ WalletConnect 功能暂时不可用，应用继续启动');
     }
   };
   
@@ -5924,7 +5927,7 @@ function App() {
                                 {session.peer.metadata.url}
                               </p>
                               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                连接时间: {new Date(session.expiry * 1000).toLocaleString()}
+                                连接时间: {new Date(Number(session.expiry) * 1000).toLocaleString()}
                               </p>
                             </div>
                             <button
