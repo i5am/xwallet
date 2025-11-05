@@ -5,6 +5,7 @@
 
 import { CRVAConfig, CRVANode, CRVANodeStatus, CRVAVerification } from '../../types/wallet';
 import { API_CONFIG, createApiUrl, API_ENDPOINTS, apiLogger } from '../../config/api';
+import { nodeDiscovery, NodeDiscoveryService } from './NodeDiscovery';
 
 export class CRVAService {
   private config: CRVAConfig;
@@ -248,7 +249,28 @@ export class CRVAService {
  * 创建默认的 CRVA 配置
  */
 export async function createDefaultCRVAConfig(): Promise<CRVAConfig> {
-  // 如果是本地开发模式，从 API 获取真实节点
+  console.log('🔍 开始去中心化节点发现...');
+  
+  // 启动节点发现服务
+  await nodeDiscovery.start();
+  
+  // 获取发现的节点
+  const discoveredNodes = nodeDiscovery.getActiveNodes();
+  
+  if (discoveredNodes.length > 0) {
+    console.log(`✅ 发现 ${discoveredNodes.length} 个活跃的 CRVA 验证节点`);
+    
+    return {
+      enabled: true,
+      verificationNodes: discoveredNodes,
+      minVerifiers: Math.min(3, discoveredNodes.length),
+      ringVRFPublicKey: '0xRingVRF...Discovered',
+      committeeTTL: 3600,
+      lastRotation: Date.now()
+    };
+  }
+  
+  // 如果节点发现失败，尝试从本地 API 获取（仅开发模式）
   if (API_CONFIG.devMode) {
     try {
       apiLogger.info('从本地 API 获取验证节点列表...');
@@ -287,7 +309,7 @@ export async function createDefaultCRVAConfig(): Promise<CRVAConfig> {
   }
   
   // 如果无法获取真实节点，创建模拟的验证节点网络
-  apiLogger.info('使用模拟验证节点网络');
+  apiLogger.warn('⚠️ 节点发现失败，使用模拟节点网络（仅用于测试）');
   const mockNodes: CRVANode[] = [
     {
       id: 'node_001',
