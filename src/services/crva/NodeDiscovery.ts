@@ -210,8 +210,8 @@ export class NodeDiscoveryService {
         endpoint: node.endpoint,
         publicKey: node.publicKey,
         status: node.active ? 'active' as const : 'offline' as const,
-        lastActive: Number(node.lastHeartbeat) * 1000,
-        reputation: Number(node.reputation)
+        lastActive: Number(node.lastHeartbeat.toString()) * 1000,
+        reputation: Number(node.reputation.toString())
       }));
       
     } catch (error) {
