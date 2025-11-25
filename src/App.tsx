@@ -3927,6 +3927,79 @@ function App() {
                   </div>
                 </div>
                 
+                {/* 移动端服务器配置 */}
+                {typeof window !== 'undefined' && (window as any).Capacitor && (
+                  <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                      <Settings className="w-4 h-4 inline mr-2" />
+                      服务器地址配置
+                    </label>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs text-gray-600 dark:text-gray-400">API 服务器</label>
+                        <input
+                          type="text"
+                          placeholder="http://192.168.1.74:3000"
+                          defaultValue={localStorage.getItem('api_base_url') || ''}
+                          onBlur={(e) => {
+                            if (e.target.value) {
+                              localStorage.setItem('api_base_url', e.target.value);
+                            }
+                          }}
+                          className="w-full mt-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="text-xs text-gray-600 dark:text-gray-400">WebSocket</label>
+                        <input
+                          type="text"
+                          placeholder="ws://192.168.1.74:3001"
+                          defaultValue={localStorage.getItem('ws_url') || ''}
+                          onBlur={(e) => {
+                            if (e.target.value) {
+                              localStorage.setItem('ws_url', e.target.value);
+                            }
+                          }}
+                          className="w-full mt-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="text-xs text-gray-600 dark:text-gray-400">区块链 RPC</label>
+                        <input
+                          type="text"
+                          placeholder="http://192.168.1.74:8545"
+                          defaultValue={localStorage.getItem('eth_rpc_url') || ''}
+                          onBlur={(e) => {
+                            if (e.target.value) {
+                              localStorage.setItem('eth_rpc_url', e.target.value);
+                            }
+                          }}
+                          className="w-full mt-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700"
+                        />
+                      </div>
+                      
+                      <button
+                        onClick={() => {
+                          alert('✅ 服务器地址已保存\n\n请重启应用使配置生效');
+                        }}
+                        className="w-full btn-primary text-sm"
+                      >
+                        保存并重启
+                      </button>
+                    </div>
+                    
+                    <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg text-xs text-yellow-800 dark:text-yellow-200">
+                      <div className="font-semibold mb-1">💡 提示：</div>
+                      <div>• 确保手机和服务器在同一局域网</div>
+                      <div>• 使用服务器的局域网 IP 地址</div>
+                      <div>• 修改后需要重启应用</div>
+                    </div>
+                  </div>
+                )}
+                
                 {/* 钱包模式切换 */}
                 {selectedWallet && (
                   <div>

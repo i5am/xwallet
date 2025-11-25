@@ -2,19 +2,83 @@
  * API 配置
  */
 
+// 检测运行环境
+const isMobile = () => {
+  if (typeof window === 'undefined') return false;
+  return !!(window as any).Capacitor;
+};
+
+// 检测是否是 iOS
+const isIOS = () => {
+  if (typeof window === 'undefined') return false;
+  const cap = (window as any).Capacitor;
+  return cap && cap.getPlatform() === 'ios';
+};
+
+// 获取存储的网络环境设置
+const getNetworkEnvironment = () => {
+  if (typeof localStorage === 'undefined') return 'local';
+  return localStorage.getItem('network_environment') || 'local';
+};
+
+// 根据环境获取 API 基础 URL
+const getBaseURL = () => {
+  const envURL = import.meta.env.VITE_API_BASE_URL;
+  if (envURL) return envURL;
+  
+  // 如果是移动端，使用生产环境的 URL 或配置的服务器地址
+  if (isMobile()) {
+    const savedURL = typeof localStorage !== 'undefined' ? localStorage.getItem('api_base_url') : null;
+    return savedURL || 'http://192.168.1.74:3000'; // 默认局域网地址
+  }
+  
+  return 'http://localhost:3000';
+};
+
+// 根据环境获取 WebSocket URL
+const getWsURL = () => {
+  const envURL = import.meta.env.VITE_WS_URL;
+  if (envURL) return envURL;
+  
+  if (isMobile()) {
+    const savedURL = typeof localStorage !== 'undefined' ? localStorage.getItem('ws_url') : null;
+    return savedURL || 'ws://192.168.1.74:3001';
+  }
+  
+  return 'ws://localhost:3001';
+};
+
+// 根据环境获取区块链 RPC URL
+const getEthRpcUrl = () => {
+  const envURL = import.meta.env.VITE_ETH_RPC_URL;
+  if (envURL) return envURL;
+  
+  if (isMobile()) {
+    const savedURL = typeof localStorage !== 'undefined' ? localStorage.getItem('eth_rpc_url') : null;
+    return savedURL || 'http://192.168.1.74:8545';
+  }
+  
+  return 'http://localhost:8545';
+};
+
 // 从环境变量读取配置，如果没有则使用默认值
 export const API_CONFIG = {
   // 后端 API 基础 URL
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
+  baseURL: getBaseURL(),
   
   // WebSocket URL
-  wsURL: import.meta.env.VITE_WS_URL || 'ws://localhost:3001',
+  wsURL: getWsURL(),
   
   // 区块链 RPC URL
-  ethRpcUrl: import.meta.env.VITE_ETH_RPC_URL || 'http://localhost:8545',
+  ethRpcUrl: getEthRpcUrl(),
   
   // 链 ID
   chainId: import.meta.env.VITE_ETH_CHAIN_ID || '31337',
+  
+  // 运行环境信息
+  isMobile: isMobile(),
+  isIOS: isIOS(),
+  networkEnvironment: getNetworkEnvironment(),
   
   // 智能合约地址
   contracts: {

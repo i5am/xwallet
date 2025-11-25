@@ -5,10 +5,11 @@ const config: CapacitorConfig = {
   appName: 'x1wallet',
   webDir: 'dist',
   server: {
-    androidScheme: 'http',
+    androidScheme: 'https',
     iosScheme: 'capacitor',  // iOS 使用 capacitor scheme
-    hostname: 'localhost',
+    hostname: 'app',  // 使用 app 而不是 localhost
     cleartext: true,
+    allowNavigation: ['*'],  // 允许导航到外部 URL
   },
   android: {
     allowMixedContent: true,
