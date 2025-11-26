@@ -137,7 +137,22 @@ function App() {
     
     // 初始化 WalletConnect
     initializeWalletConnect();
+    
+    // 初始化 CRVA 服务（测试节点发现）
+    initializeCRVAService();
   }, []);
+  
+  // 初始化 CRVA 服务
+  const initializeCRVAService = async () => {
+    try {
+      console.log('🔄 预加载 CRVA 节点发现服务...');
+      const crvaConfig = await createDefaultCRVAConfig();
+      const crvaService = new CRVAService(crvaConfig);
+      console.log('✅ CRVA 服务初始化完成');
+    } catch (error) {
+      console.error('❌ CRVA 服务初始化失败:', error);
+    }
+  };
   
   // 初始化 WalletConnect
   const initializeWalletConnect = async () => {
