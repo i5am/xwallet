@@ -147,8 +147,9 @@ function App() {
     try {
       console.log('🔄 预加载 CRVA 节点发现服务...');
       const crvaConfig = await createDefaultCRVAConfig();
-      const crvaService = new CRVAService(crvaConfig);
-      console.log('✅ CRVA 服务初始化完成');
+      // 创建 CRVA 服务实例进行预热
+      new CRVAService(crvaConfig);
+      console.log('✅ CRVA 服务初始化完成，发现', crvaConfig.verificationNodes.length, '个验证节点');
     } catch (error) {
       console.error('❌ CRVA 服务初始化失败:', error);
     }
