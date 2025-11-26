@@ -1,6 +1,7 @@
 /**
  * CRVA 节点发现服务
  * 实现去中心化的节点发现机制
+ * @version 1.0.1 - 修复 BigInt 转换问题
  */
 
 import { CRVANode, CRVANodeStatus } from '@/types';
@@ -77,7 +78,7 @@ export class NodeDiscoveryService {
    * 开始节点发现
    */
   async start(): Promise<void> {
-    console.log('🔍 开始 CRVA 节点发现...');
+    console.log('🔍 开始 CRVA 节点发现... (v1.0.1)');
     
     // 执行所有启用的发现方法
     const discoveryPromises = this.config.methods.map(method => 
@@ -205,14 +206,33 @@ export class NodeDiscoveryService {
       console.log(`✅ 从区块链读取到 ${nodes.length} 个活跃节点`);
       
       // 转换为 CRVANode 格式
-      return nodes.map((node: any, index: number) => ({
-        id: `chain_node_${index + 1}`,
-        endpoint: node.endpoint,
-        publicKey: node.publicKey,
-        status: node.active ? 'active' as const : 'offline' as const,
-        lastActive: Number(node.lastHeartbeat.toString()) * 1000,
-        reputation: Number(node.reputation.toString())
-      }));
+      return nodes.map((node: any, index: number) => {
+        try {
+          // 安全地转换 BigInt 类型
+          const lastHeartbeat = node.lastHeartbeat ? Number(node.lastHeartbeat.toString()) : Math.floor(Date.now() / 1000);
+          const reputation = node.reputation ? Number(node.reputation.toString()) : 80;
+          
+          return {
+            id: `chain_node_${index + 1}`,
+            endpoint: node.endpoint,
+            publicKey: node.publicKey,
+            status: node.active ? 'active' as const : 'offline' as const,
+            lastActive: lastHeartbeat * 1000,
+            reputation: reputation
+          };
+        } catch (err) {
+          console.error(`节点 ${index} 数据转换失败:`, err);
+          // 返回默认值
+          return {
+            id: `chain_node_${index + 1}`,
+            endpoint: node.endpoint || '',
+            publicKey: node.publicKey || '',
+            status: 'offline' as const,
+            lastActive: Date.now(),
+            reputation: 80
+          };
+        }
+      });
       
     } catch (error) {
       console.error('从区块链发现节点失败:', error);
