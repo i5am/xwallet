@@ -357,7 +357,8 @@ function App() {
       } else {
         const ethAdapter = new ETHAdapter(networkConfig.rpcUrl, wallet.network);
         const balanceWei = await ethAdapter.getBalance(wallet.address);
-        const balanceETH = (Number(balanceWei) / 1e18).toFixed(4);
+        // 安全地转换 BigInt 为 number
+        const balanceETH = (Number(balanceWei.toString()) / 1e18).toFixed(4);
         setWalletBalance(balanceETH);
       }
     } catch (error) {
@@ -1299,7 +1300,8 @@ function App() {
       } else {
         const ethAdapter = new ETHAdapter(networkConfig.rpcUrl, wallet.network);
         const balanceWei = await ethAdapter.getBalance(wallet.address);
-        balance = Number(balanceWei);
+        // 安全地转换 BigInt 为 number
+        balance = Number(balanceWei.toString());
         
         // 对于 ETH, Lightning Network 不适用
         alert('⚠️ 提示: Lightning Network 主要用于 BTC 支付。\n\n对于 ETH 支付,建议使用普通的"发送"功能。');
@@ -6021,7 +6023,7 @@ function App() {
                                 {session?.peer?.metadata?.url || ''}
                               </p>
                               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                连接时间: {session?.expiry ? new Date(Number(session.expiry) * 1000).toLocaleString() : '未知'}
+                                连接时间: {session?.expiry ? new Date(Number(session.expiry.toString()) * 1000).toLocaleString() : '未知'}
                               </p>
                             </div>
                             <button
