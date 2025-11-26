@@ -58,8 +58,8 @@ export class ERC20Adapter {
       return {
         name,
         symbol,
-        decimals: Number(decimals),
-        totalSupply: formatETH(totalSupply, Number(decimals))
+        decimals: Number(decimals.toString()),
+        totalSupply: formatETH(totalSupply, Number(decimals.toString()))
       };
     } catch (error) {
       throw new Error(`Failed to get token info: ${(error as Error).message}`);
@@ -84,8 +84,8 @@ export class ERC20Adapter {
         contractAddress: tokenAddress,
         name,
         symbol,
-        decimals: Number(decimals),
-        balance: formatETH(balance, Number(decimals))
+        decimals: Number(decimals.toString()),
+        balance: formatETH(balance, Number(decimals.toString()))
       };
     } catch (error) {
       throw new Error(`Failed to get token balance: ${(error as Error).message}`);
@@ -108,7 +108,7 @@ export class ERC20Adapter {
       const decimals = await contract.decimals();
       
       // 转换金额到 wei
-      const amountWei = ethToWei(amount, Number(decimals));
+      const amountWei = ethToWei(amount, Number(decimals.toString()));
       
       // 编码 transfer 函数调用
       const data = contract.interface.encodeFunctionData('transfer', [to, amountWei]);
@@ -158,7 +158,7 @@ export class ERC20Adapter {
       const contract = this.getContract(tokenAddress, wallet);
       
       const decimals = await contract.decimals();
-      const amountWei = ethToWei(amount, Number(decimals));
+      const amountWei = ethToWei(amount, Number(decimals.toString()));
       
       const tx = await contract.transfer(to, amountWei);
       await tx.wait();
@@ -200,7 +200,7 @@ export class ERC20Adapter {
       const allowance = await contract.allowance(owner, spender);
       const decimals = await contract.decimals();
       
-      return formatETH(allowance, Number(decimals));
+      return formatETH(allowance, Number(decimals.toString()));
     } catch (error) {
       throw new Error(`Failed to get allowance: ${(error as Error).message}`);
     }
@@ -222,7 +222,7 @@ export class ERC20Adapter {
       const contract = this.getContract(tokenAddress, wallet);
       
       const decimals = await contract.decimals();
-      const amountWei = ethToWei(amount, Number(decimals));
+      const amountWei = ethToWei(amount, Number(decimals.toString()));
       
       const tx = await contract.approve(spender, amountWei);
       await tx.wait();
